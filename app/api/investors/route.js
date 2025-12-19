@@ -27,40 +27,51 @@ export async function GET(request) {
       where.isActive = isActive === 'true'
     }
 
-    const [investors, total] = await Promise.all([
-      prisma.investor.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { name: 'asc' },
-        include: includeStats ? {
-          paymentSources: {
-            select: {
-              amount: true,
-            },
-          },
-        } : undefined,
-      }),
-      prisma.investor.count({ where }),
-    ])
+    // Buscar investidores
+    const investors = await prisma.investor.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { name: 'asc' },
+    })
 
-    // Calcular estatísticas se solicitado
-    const investorsWithStats = includeStats ? investors.map(investor => {
-      const totalInvested = investor.paymentSources?.reduce(
-        (sum, ps) => sum + Number(ps.amount),
-        0
-      ) || 0
-      const totalAccounts = investor.paymentSources?.length || 0
-
-      return {
-        ...investor,
-        stats: {
-          totalInvested,
-          totalAccounts,
+    // Calcular estatísticas usando agregação se solicitado
+    let investorsWithStats = investors
+    if (includeStats && investors.length > 0) {
+      const investorIds = investors.map(inv => inv.id)
+      
+      // Usar agregação do Prisma para calcular estatísticas de uma vez
+      const statsResults = await prisma.paymentSource.groupBy({
+        by: ['investorId'],
+        where: {
+          investorId: { in: investorIds },
         },
-        paymentSources: undefined, // Remover do response
-      }
-    }) : investors
+        _sum: {
+          amount: true,
+        },
+        _count: {
+          id: true,
+        },
+      })
+
+      // Criar mapa de estatísticas
+      const statsMap = {}
+      statsResults.forEach(stat => {
+        statsMap[stat.investorId] = {
+          totalInvested: Number(stat._sum.amount || 0),
+          totalAccounts: stat._count.id,
+        }
+      })
+
+      // Adicionar estatísticas aos investidores
+      investorsWithStats = investors.map(investor => ({
+        ...investor,
+        stats: statsMap[investor.id] || { totalInvested: 0, totalAccounts: 0 },
+      }))
+    }
+
+    // Contar total apenas se necessário (para paginação)
+    const total = await prisma.investor.count({ where })
 
     return NextResponse.json({
       success: true,
