@@ -208,6 +208,48 @@ export async function POST(request) {
         const installment = data.installments[i]
         const installmentNumber = data.installments.length > 1 ? ` - Parcela ${i + 1}/${data.installments.length}` : ''
         
+        // Validar paymentMethodId se fornecido
+        let paymentMethodId = null
+        if (installment.paymentMethodId && installment.paymentMethodId.trim() !== '') {
+          const paymentMethod = await prisma.paymentMethod.findUnique({
+            where: { id: installment.paymentMethodId },
+          })
+          if (!paymentMethod) {
+            return NextResponse.json(
+              { 
+                success: false, 
+                error: { 
+                  message: `Forma de pagamento não encontrada para a parcela ${i + 1}`, 
+                  code: 'NOT_FOUND' 
+                } 
+              },
+              { status: 404 }
+            )
+          }
+          paymentMethodId = installment.paymentMethodId
+        }
+
+        // Validar categoryId se fornecido
+        let categoryId = null
+        if (data.categoryId && data.categoryId.trim() !== '') {
+          const category = await prisma.category.findUnique({
+            where: { id: data.categoryId },
+          })
+          if (!category) {
+            return NextResponse.json(
+              { 
+                success: false, 
+                error: { 
+                  message: 'Categoria não encontrada', 
+                  code: 'NOT_FOUND' 
+                } 
+              },
+              { status: 404 }
+            )
+          }
+          categoryId = data.categoryId
+        }
+        
         await prisma.accountsReceivable.create({
           data: {
             customerId: data.customerId,
@@ -215,8 +257,8 @@ export async function POST(request) {
             description: installment.description || `${baseDescription}${installmentNumber}`,
             dueDate: new Date(installment.dueDate),
             amount: new Decimal(installment.amount),
-            categoryId: data.categoryId || null,
-            paymentMethodId: installment.paymentMethodId || null,
+            categoryId,
+            paymentMethodId,
             status: 'OPEN',
           },
         })
@@ -244,6 +286,23 @@ export async function POST(request) {
       )
     }
 
+    // Tratar erro de foreign key constraint
+    if (error.code === 'P2003' || error.message?.includes('Foreign key constraint')) {
+      const field = error.meta?.field_name || 'campo'
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: { 
+            message: `Erro de integridade: ${field} não encontrado. Verifique se todos os dados relacionados existem no banco.`, 
+            code: 'FOREIGN_KEY_ERROR',
+            details: error.message
+          } 
+        },
+        { status: 400 }
+      )
+    }
+
+    console.error('Erro ao criar pedido de venda:', error)
     return NextResponse.json(
       { success: false, error: { message: error.message, code: error.code || 'ERROR' } },
       { status: error.statusCode || 500 }
