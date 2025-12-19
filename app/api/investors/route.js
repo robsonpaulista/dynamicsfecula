@@ -41,27 +41,33 @@ export async function GET(request) {
       const investorIds = investors.map(inv => inv.id)
       
       // Usar agregação do Prisma para calcular estatísticas de uma vez
-      const statsResults = await prisma.paymentSource.groupBy({
-        by: ['investorId'],
-        where: {
-          investorId: { in: investorIds },
-        },
-        _sum: {
-          amount: true,
-        },
-        _count: {
-          id: true,
-        },
-      })
-
-      // Criar mapa de estatísticas
+      // Fazer em batches se houver muitos investidores para evitar problemas
+      const batchSize = 50
       const statsMap = {}
-      statsResults.forEach(stat => {
-        statsMap[stat.investorId] = {
-          totalInvested: Number(stat._sum.amount || 0),
-          totalAccounts: stat._count.id,
-        }
-      })
+      
+      for (let i = 0; i < investorIds.length; i += batchSize) {
+        const batch = investorIds.slice(i, i + batchSize)
+        
+        const statsResults = await prisma.paymentSource.groupBy({
+          by: ['investorId'],
+          where: {
+            investorId: { in: batch },
+          },
+          _sum: {
+            amount: true,
+          },
+          _count: {
+            id: true,
+          },
+        })
+
+        statsResults.forEach(stat => {
+          statsMap[stat.investorId] = {
+            totalInvested: Number(stat._sum.amount || 0),
+            totalAccounts: stat._count.id,
+          }
+        })
+      }
 
       // Adicionar estatísticas aos investidores
       investorsWithStats = investors.map(investor => ({
@@ -70,8 +76,9 @@ export async function GET(request) {
       }))
     }
 
-    // Contar total apenas se necessário (para paginação)
-    const total = await prisma.investor.count({ where })
+    // Contar total apenas se não estiver incluindo stats (para evitar múltiplas conexões)
+    // Ou fazer de forma mais eficiente
+    const total = includeStats ? investors.length : await prisma.investor.count({ where })
 
     return NextResponse.json({
       success: true,

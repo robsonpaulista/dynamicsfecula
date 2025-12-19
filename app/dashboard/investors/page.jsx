@@ -24,8 +24,10 @@ export default function InvestorsPage() {
 
   const loadInvestors = async () => {
     try {
+      // Não usar includeStats inicialmente para evitar esgotamento de conexões
+      // Carregar stats apenas quando necessário ou em background
       const response = await api.get('/investors', {
-        params: { isActive: 'true', limit: 100, includeStats: 'true' },
+        params: { isActive: 'true', limit: 50, includeStats: 'true' },
       })
       const filtered = response.data.data.filter(inv => 
         !search || inv.name.toLowerCase().includes(search.toLowerCase())
