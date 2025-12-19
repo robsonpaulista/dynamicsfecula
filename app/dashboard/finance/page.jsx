@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react'
 import api from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { DollarSign, TrendingUp, TrendingDown, RefreshCw, CheckCircle, Loader2 } from 'lucide-react'
+import { DollarSign, TrendingUp, TrendingDown, RefreshCw, CheckCircle, Loader2, Plus, Trash2, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 export default function FinancePage() {
@@ -13,6 +15,9 @@ export default function FinancePage() {
   const [accountsReceivable, setAccountsReceivable] = useState([])
   const [loading, setLoading] = useState(true)
   const [processingAccount, setProcessingAccount] = useState(null)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState(null)
+  const [paymentSources, setPaymentSources] = useState([{ name: '', amount: '' }])
   const { toast } = useToast()
 
   useEffect(() => {
@@ -45,20 +50,74 @@ export default function FinancePage() {
     .filter((ar) => ar.status === 'OPEN')
     .reduce((sum, ar) => sum + Number(ar.amount), 0)
 
-  const handlePayAccount = async (accountId) => {
-    if (!confirm('Deseja confirmar o pagamento desta conta?')) {
+  const openPaymentModal = (account) => {
+    setSelectedAccount(account)
+    setPaymentSources([{ name: '', amount: '' }])
+    setShowPaymentModal(true)
+  }
+
+  const closePaymentModal = () => {
+    setShowPaymentModal(false)
+    setSelectedAccount(null)
+    setPaymentSources([{ name: '', amount: '' }])
+  }
+
+  const addPaymentSource = () => {
+    setPaymentSources([...paymentSources, { name: '', amount: '' }])
+  }
+
+  const removePaymentSource = (index) => {
+    if (paymentSources.length > 1) {
+      setPaymentSources(paymentSources.filter((_, i) => i !== index))
+    }
+  }
+
+  const updatePaymentSource = (index, field, value) => {
+    const updated = [...paymentSources]
+    updated[index] = { ...updated[index], [field]: value }
+    setPaymentSources(updated)
+  }
+
+  const handlePayAccount = async () => {
+    if (!selectedAccount) return
+
+    // Validar fontes pagadoras
+    const validSources = paymentSources.filter(ps => ps.name.trim() && ps.amount)
+    if (validSources.length === 0) {
+      toast({
+        title: 'Erro',
+        description: 'Adicione pelo menos uma fonte pagadora',
+        variant: 'destructive',
+      })
       return
     }
 
-    setProcessingAccount(`ap-${accountId}`)
+    const totalSources = validSources.reduce((sum, ps) => sum + parseFloat(ps.amount || 0), 0)
+    const accountAmount = Number(selectedAccount.amount)
+
+    if (Math.abs(totalSources - accountAmount) > 0.01) {
+      toast({
+        title: 'Erro',
+        description: `A soma das fontes pagadoras (R$ ${totalSources.toFixed(2)}) deve ser igual ao valor da conta (R$ ${accountAmount.toFixed(2)})`,
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setProcessingAccount(`ap-${selectedAccount.id}`)
     try {
-      await api.post(`/finance/ap/${accountId}/pay`, {
+      await api.post(`/finance/ap/${selectedAccount.id}/pay`, {
         paidAt: new Date().toISOString(),
+        paymentSources: validSources.map(ps => ({
+          name: ps.name.trim(),
+          amount: parseFloat(ps.amount),
+        })),
       })
       toast({
         title: 'Sucesso!',
         description: 'Conta a pagar baixada com sucesso',
       })
+      closePaymentModal()
       loadFinance()
     } catch (error) {
       toast({
@@ -195,7 +254,7 @@ export default function FinancePage() {
                       {ap.status === 'OPEN' && (
                         <Button
                           size="sm"
-                          onClick={() => handlePayAccount(ap.id)}
+                          onClick={() => openPaymentModal(ap)}
                           disabled={processingAccount === `ap-${ap.id}`}
                           className="bg-green-600 hover:bg-green-700 text-white flex-shrink-0"
                         >
@@ -211,6 +270,16 @@ export default function FinancePage() {
                             </>
                           )}
                         </Button>
+                      )}
+                      {ap.status === 'PAID' && ap.paymentSources && ap.paymentSources.length > 0 && (
+                        <div className="text-xs text-gray-600 mt-1">
+                          <p className="font-semibold">Fontes pagadoras:</p>
+                          {ap.paymentSources.map((ps, idx) => (
+                            <p key={idx} className="text-gray-500">
+                              {ps.name}: {formatCurrency(Number(ps.amount))}
+                            </p>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -278,6 +347,135 @@ export default function FinancePage() {
           </Card>
         </div>
       </div>
+
+      {/* Modal de Fontes Pagadoras */}
+      {showPaymentModal && selectedAccount && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Baixar Conta a Pagar</CardTitle>
+              <Button variant="ghost" size="icon" onClick={closePaymentModal}>
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Descrição</p>
+                <p className="font-semibold">{selectedAccount.description}</p>
+                <p className="text-sm text-gray-600 mt-2">Valor Total</p>
+                <p className="text-xl font-bold text-[#FF8C00]">{formatCurrency(Number(selectedAccount.amount))}</p>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <Label className="text-base font-semibold">Fontes Pagadoras *</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addPaymentSource}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar Fonte
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  {paymentSources.map((source, index) => (
+                    <div key={index} className="flex gap-2 items-start p-3 bg-gray-50 rounded-lg">
+                      <div className="flex-1 space-y-2">
+                        <Label htmlFor={`source-name-${index}`} className="text-xs">Nome da Fonte Pagadora *</Label>
+                        <Input
+                          id={`source-name-${index}`}
+                          placeholder="Ex: Sócio João, Investidor XYZ..."
+                          value={source.name}
+                          onChange={(e) => updatePaymentSource(index, 'name', e.target.value)}
+                        />
+                      </div>
+                      <div className="w-32 space-y-2">
+                        <Label htmlFor={`source-amount-${index}`} className="text-xs">Valor *</Label>
+                        <Input
+                          id={`source-amount-${index}`}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          value={source.amount}
+                          onChange={(e) => updatePaymentSource(index, 'amount', e.target.value)}
+                        />
+                      </div>
+                      {paymentSources.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removePaymentSource(index)}
+                          className="mt-6 text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-gray-700">Total das Fontes:</span>
+                    <span className={`text-lg font-bold ${
+                      Math.abs(
+                        paymentSources.reduce((sum, ps) => sum + parseFloat(ps.amount || 0), 0) - 
+                        Number(selectedAccount.amount)
+                      ) < 0.01 
+                        ? 'text-green-600' 
+                        : 'text-red-600'
+                    }`}>
+                      {formatCurrency(paymentSources.reduce((sum, ps) => sum + parseFloat(ps.amount || 0), 0))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-sm text-gray-600">Valor da Conta:</span>
+                    <span className="text-sm font-semibold text-gray-700">
+                      {formatCurrency(Number(selectedAccount.amount))}
+                    </span>
+                  </div>
+                  {Math.abs(
+                    paymentSources.reduce((sum, ps) => sum + parseFloat(ps.amount || 0), 0) - 
+                    Number(selectedAccount.amount)
+                  ) >= 0.01 && (
+                    <p className="text-xs text-red-600 mt-2">
+                      ⚠️ A soma das fontes deve ser igual ao valor da conta
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-4 border-t">
+                <Button variant="outline" onClick={closePaymentModal}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handlePayAccount}
+                  disabled={processingAccount === `ap-${selectedAccount.id}`}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {processingAccount === `ap-${selectedAccount.id}` ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Baixando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Confirmar Pagamento
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

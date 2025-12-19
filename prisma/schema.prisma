@@ -227,10 +227,23 @@ model AccountsPayable {
   paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
   supplier        Supplier?      @relation(fields: [supplierId], references: [id])
+  paymentSources  PaymentSource[]
 
   @@index([status])
   @@index([dueDate])
   @@map("accounts_payable")
+}
+
+model PaymentSource {
+  id              String          @id @default(uuid())
+  accountsPayableId String        @map("accounts_payable_id")
+  name            String
+  amount          Decimal         @db.Decimal(10, 2)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  accountsPayable AccountsPayable @relation(fields: [accountsPayableId], references: [id], onDelete: Cascade)
+
+  @@index([accountsPayableId])
+  @@map("payment_sources")
 }
 
 model AccountsReceivable {
@@ -364,3 +377,4 @@ enum AuditAction {
   APPROVE
   CANCEL
 }
+

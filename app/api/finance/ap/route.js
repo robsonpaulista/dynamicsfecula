@@ -39,6 +39,13 @@ export async function GET(request) {
               name: true,
             },
           },
+          paymentSources: {
+            select: {
+              id: true,
+              name: true,
+              amount: true,
+            },
+          },
         },
         orderBy: { dueDate: 'asc' },
       }),
@@ -50,6 +57,10 @@ export async function GET(request) {
       data: accounts.map(ap => ({
         ...ap,
         amount: Number(ap.amount),
+        paymentSources: ap.paymentSources?.map(ps => ({
+          ...ps,
+          amount: Number(ps.amount),
+        })) || [],
       })),
       pagination: {
         page,
@@ -65,6 +76,7 @@ export async function GET(request) {
     )
   }
 }
+
 
 
 

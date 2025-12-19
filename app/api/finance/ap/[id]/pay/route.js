@@ -3,13 +3,28 @@ import { prisma } from '@/lib/prisma'
 import { authenticate, authorize } from '@/middleware/auth'
 import { NotFoundError, BadRequestError } from '@/utils/errors'
 
+import { z } from 'zod'
+import { Decimal } from '@prisma/client/runtime/library'
+
+const paymentSourceSchema = z.object({
+  name: z.string().min(1, 'Nome da fonte pagadora é obrigatório'),
+  amount: z.number().min(0.01, 'Valor deve ser maior que zero'),
+})
+
+const payAccountSchema = z.object({
+  paidAt: z.string().or(z.date()).optional(),
+  paymentMethodId: z.string().optional(),
+  paymentSources: z.array(paymentSourceSchema).optional(),
+})
+
 export async function POST(request, { params }) {
   try {
     const user = authenticate(request)
     authorize(user, 'ADMIN', 'FINANCEIRO')
 
     const body = await request.json()
-    const { paidAt, paymentMethodId } = body
+    const data = payAccountSchema.parse(body)
+    const { paidAt, paymentMethodId, paymentSources } = data
 
     const account = await prisma.accountsPayable.findUnique({
       where: { id: params.id },
@@ -29,13 +44,41 @@ export async function POST(request, { params }) {
       )
     }
 
-    // Atualizar conta
+    // Validar fontes pagadoras se fornecidas
+    if (paymentSources && paymentSources.length > 0) {
+      const totalSources = paymentSources.reduce((sum, source) => sum + source.amount, 0)
+      const accountAmount = Number(account.amount)
+
+      if (Math.abs(totalSources - accountAmount) > 0.01) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: { 
+              message: `A soma das fontes pagadoras (R$ ${totalSources.toFixed(2)}) deve ser igual ao valor da conta (R$ ${accountAmount.toFixed(2)})`, 
+              code: 'BAD_REQUEST' 
+            } 
+          },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Atualizar conta e criar fontes pagadoras
     const updatedAccount = await prisma.accountsPayable.update({
       where: { id: params.id },
       data: {
         status: 'PAID',
         paidAt: new Date(paidAt || new Date()),
         paymentMethodId: paymentMethodId || null,
+        paymentSources: paymentSources && paymentSources.length > 0 ? {
+          create: paymentSources.map(source => ({
+            name: source.name,
+            amount: new Decimal(source.amount),
+          })),
+        } : undefined,
+      },
+      include: {
+        paymentSources: true,
       },
     })
 
@@ -58,10 +101,21 @@ export async function POST(request, { params }) {
       data: {
         ...updatedAccount,
         amount: Number(updatedAccount.amount),
+        paymentSources: updatedAccount.paymentSources?.map(ps => ({
+          ...ps,
+          amount: Number(ps.amount),
+        })) || [],
       },
       message: 'Conta paga e registrada no fluxo de caixa',
     })
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: { message: error.errors[0].message, code: 'VALIDATION_ERROR' } },
+        { status: 400 }
+      )
+    }
+
     if (error instanceof NotFoundError || error instanceof BadRequestError) {
       return NextResponse.json(
         { success: false, error: { message: error.message, code: error.code || 'ERROR' } },
@@ -75,6 +129,7 @@ export async function POST(request, { params }) {
     )
   }
 }
+
 
 
 
