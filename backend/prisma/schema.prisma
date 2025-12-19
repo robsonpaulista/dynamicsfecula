@@ -1,0 +1,438 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  FINANCEIRO
+  COMPRAS
+  VENDAS
+  ESTOQUE
+}
+
+enum ProductType {
+  MP      // Matéria-prima
+  PA      // Produto acabado
+  SERVICO // Serviço
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  APPROVED
+  RECEIVED
+  CANCELED
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  DELIVERED
+  CANCELED
+}
+
+enum StockMovementType {
+  IN      // Entrada
+  OUT     // Saída
+  ADJUST  // Ajuste
+}
+
+enum ReferenceType {
+  PURCHASE
+  SALE
+  INVENTORY
+  MANUAL
+}
+
+enum AccountStatus {
+  OPEN
+  PAID
+  RECEIVED
+  CANCELED
+}
+
+enum CashTransactionType {
+  IN
+  OUT
+}
+
+enum CashTransactionOrigin {
+  AR
+  AP
+  MANUAL
+}
+
+enum CategoryKind {
+  INCOME
+  EXPENSE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  APPROVE
+  CANCEL
+}
+
+// ============================================
+// USUÁRIOS
+// ============================================
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(ESTOQUE)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relações
+  createdPurchases     PurchaseOrder[] @relation("PurchaseCreatedBy")
+  createdSales         SalesOrder[]    @relation("SalesCreatedBy")
+  createdStockMovements StockMovement[]
+  createdReceipts      PurchaseReceipt[]
+  createdAuditLogs     AuditLog[]
+  createdCashTransactions CashTransaction[]
+
+  @@map("users")
+}
+
+// ============================================
+// FORNECEDORES E CLIENTES
+// ============================================
+
+model Supplier {
+  id         String   @id @default(uuid())
+  name       String
+  document   String?  // CPF/CNPJ
+  phone      String?
+  email      String?
+  addressJson Json?   @map("address_json")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relações
+  purchaseOrders PurchaseOrder[]
+  accountsPayable AccountsPayable[]
+
+  @@map("suppliers")
+}
+
+model Customer {
+  id         String   @id @default(uuid())
+  name       String
+  document   String?  // CPF/CNPJ
+  phone      String?
+  email      String?
+  addressJson Json?   @map("address_json")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relações
+  salesOrders        SalesOrder[]
+  accountsReceivable AccountsReceivable[]
+
+  @@map("customers")
+}
+
+// ============================================
+// PRODUTOS E ESTOQUE
+// ============================================
+
+model Product {
+  id         String      @id @default(uuid())
+  sku        String      @unique
+  name       String
+  type       ProductType @default(MP)
+  unit       String      // kg, un, cx, etc
+  minStock   Decimal?    @default(0) @map("min_stock") @db.Decimal(10, 2)
+  costPrice  Decimal?    @default(0) @map("cost_price") @db.Decimal(10, 2)
+  salePrice  Decimal?    @default(0) @map("sale_price") @db.Decimal(10, 2)
+  isActive   Boolean     @default(true) @map("is_active")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  // Relações
+  purchaseItems    PurchaseItem[]
+  salesItems       SalesItem[]
+  stockBalance     StockBalance?
+  stockMovements   StockMovement[]
+
+  @@map("products")
+}
+
+model StockBalance {
+  id        String   @id @default(uuid())
+  productId String   @unique @map("product_id")
+  quantity  Decimal  @db.Decimal(10, 2)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relações
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("stock_balances")
+}
+
+model StockMovement {
+  id            String            @id @default(uuid())
+  productId     String            @map("product_id")
+  type          StockMovementType
+  quantity      Decimal           @db.Decimal(10, 2)
+  unitCost      Decimal?          @map("unit_cost") @db.Decimal(10, 2)
+  referenceType ReferenceType?    @map("reference_type")
+  referenceId   String?           @map("reference_id")
+  note          String?
+  createdById   String            @map("created_by")
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  // Relações
+  product   Product @relation(fields: [productId], references: [id])
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  @@map("stock_movements")
+  @@index([productId])
+  @@index([createdAt])
+}
+
+// ============================================
+// COMPRAS
+// ============================================
+
+model PurchaseOrder {
+  id         String              @id @default(uuid())
+  supplierId String              @map("supplier_id")
+  status     PurchaseOrderStatus @default(DRAFT)
+  issueDate  DateTime            @map("issue_date")
+  total      Decimal             @default(0) @db.Decimal(10, 2)
+  notes      String?
+  createdById String             @map("created_by")
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  // Relações
+  supplier      Supplier          @relation(fields: [supplierId], references: [id])
+  items         PurchaseItem[]
+  receipts      PurchaseReceipt[]
+  accountsPayable AccountsPayable[]
+  createdBy     User              @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
+
+  @@map("purchase_orders")
+  @@index([supplierId])
+  @@index([status])
+}
+
+model PurchaseItem {
+  id              String   @id @default(uuid())
+  purchaseOrderId String   @map("purchase_order_id")
+  productId       String   @map("product_id")
+  quantity        Decimal  @db.Decimal(10, 2)
+  unitPrice       Decimal  @map("unit_price") @db.Decimal(10, 2)
+  total           Decimal  @default(0) @db.Decimal(10, 2)
+
+  // Relações
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@map("purchase_items")
+  @@index([purchaseOrderId])
+}
+
+model PurchaseReceipt {
+  id              String   @id @default(uuid())
+  purchaseOrderId String  @map("purchase_order_id")
+  receiptDate     DateTime @map("receipt_date")
+  invoiceNumber   String?  @map("invoice_number")
+  total           Decimal  @default(0) @db.Decimal(10, 2)
+  createdById     String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relações
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  createdBy     User          @relation(fields: [createdById], references: [id])
+
+  @@map("purchase_receipts")
+  @@index([purchaseOrderId])
+}
+
+// ============================================
+// VENDAS
+// ============================================
+
+model SalesOrder {
+  id         String           @id @default(uuid())
+  customerId String           @map("customer_id")
+  status     SalesOrderStatus @default(DRAFT)
+  saleDate   DateTime         @map("sale_date")
+  total      Decimal          @default(0) @db.Decimal(10, 2)
+  createdById String          @map("created_by")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  // Relações
+  customer          Customer           @relation(fields: [customerId], references: [id])
+  items             SalesItem[]
+  accountsReceivable AccountsReceivable[]
+  createdBy         User               @relation("SalesCreatedBy", fields: [createdById], references: [id])
+
+  @@map("sales_orders")
+  @@index([customerId])
+  @@index([status])
+}
+
+model SalesItem {
+  id           String   @id @default(uuid())
+  salesOrderId String  @map("sales_order_id")
+  productId    String   @map("product_id")
+  quantity     Decimal  @db.Decimal(10, 2)
+  unitPrice    Decimal  @map("unit_price") @db.Decimal(10, 2)
+  total        Decimal  @default(0) @db.Decimal(10, 2)
+
+  // Relações
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  product    Product    @relation(fields: [productId], references: [id])
+
+  @@map("sales_items")
+  @@index([salesOrderId])
+}
+
+// ============================================
+// FINANCEIRO
+// ============================================
+
+model Category {
+  id   String       @id @default(uuid())
+  name String
+  kind CategoryKind
+
+  // Relações
+  accountsPayable     AccountsPayable[]
+  accountsReceivable  AccountsReceivable[]
+  cashTransactions    CashTransaction[]
+
+  @@map("categories")
+}
+
+model PaymentMethod {
+  id   String @id @default(uuid())
+  name String // PIX, Dinheiro, Cartão, Boleto, etc
+
+  // Relações
+  accountsPayable     AccountsPayable[]
+  accountsReceivable  AccountsReceivable[]
+
+  @@map("payment_methods")
+}
+
+model AccountsPayable {
+  id              String        @id @default(uuid())
+  supplierId      String?       @map("supplier_id")
+  purchaseOrderId String?       @map("purchase_order_id")
+  description     String
+  categoryId      String?       @map("category_id")
+  dueDate         DateTime      @map("due_date")
+  amount          Decimal       @db.Decimal(10, 2)
+  status          AccountStatus @default(OPEN)
+  paidAt          DateTime?     @map("paid_at")
+  paymentMethodId String?       @map("payment_method_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relações
+  supplier      Supplier?      @relation(fields: [supplierId], references: [id])
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+
+  @@map("accounts_payable")
+  @@index([status])
+  @@index([dueDate])
+}
+
+model AccountsReceivable {
+  id              String        @id @default(uuid())
+  customerId      String?       @map("customer_id")
+  salesOrderId    String?       @map("sales_order_id")
+  description     String
+  categoryId      String?       @map("category_id")
+  dueDate         DateTime      @map("due_date")
+  amount          Decimal       @db.Decimal(10, 2)
+  status          AccountStatus @default(OPEN)
+  receivedAt      DateTime?     @map("received_at")
+  paymentMethodId String?       @map("payment_method_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relações
+  customer      Customer?      @relation(fields: [customerId], references: [id])
+  salesOrder    SalesOrder?    @relation(fields: [salesOrderId], references: [id])
+  category      Category?      @relation(fields: [categoryId], references: [id])
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
+
+  @@map("accounts_receivable")
+  @@index([status])
+  @@index([dueDate])
+}
+
+model CashTransaction {
+  id          String                @id @default(uuid())
+  type        CashTransactionType
+  origin      CashTransactionOrigin
+  originId    String?               @map("origin_id")
+  date        DateTime
+  amount      Decimal               @db.Decimal(10, 2)
+  description String
+  categoryId  String?               @map("category_id")
+  createdById String                @map("created_by")
+  createdAt   DateTime              @default(now()) @map("created_at")
+
+  // Relações
+  category  Category? @relation(fields: [categoryId], references: [id])
+  createdBy User      @relation(fields: [createdById], references: [id])
+
+  @@map("cash_transactions")
+  @@index([date])
+  @@index([type])
+}
+
+// ============================================
+// AUDITORIA
+// ============================================
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  userId     String      @map("user_id")
+  action     AuditAction
+  entity     String      // product, sale, purchase, etc
+  entityId   String?     @map("entity_id")
+  metadataJson Json?     @map("metadata_json")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  // Relações
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+
+
+
+
+
+

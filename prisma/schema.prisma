@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(ESTOQUE)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  FINANCEIRO
+  COMPRAS
+  VENDAS
+  ESTOQUE
+}
+
+enum ProductType {
+  MP
+  PA
+  SERVICO
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  APPROVED
+  RECEIVED
+  CANCELED
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  DELIVERED
+  CANCELED
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUST
+}
+
+enum ReferenceType {
+  PURCHASE
+  SALE
+  INVENTORY
+  MANUAL
+}
+
+enum AccountStatus {
+  OPEN
+  PAID
+  RECEIVED
+  CANCELED
+}
+
+enum CashTransactionType {
+  IN
+  OUT
+}
+
+enum CashTransactionOrigin {
+  AR
+  AP
+  MANUAL
+}
+
+enum CategoryKind {
+  INCOME
+  EXPENSE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  APPROVE
+  CANCEL
+}
+
+
+
+
+
+
