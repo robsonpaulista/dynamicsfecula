@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { DollarSign, TrendingUp, TrendingDown, RefreshCw, CheckCircle, Loader2, Plus, Trash2, X } from 'lucide-react'
-import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
 
 export default function FinancePage() {
