@@ -22,8 +22,6 @@ export default function InvestorsPage() {
     loadInvestors()
   }, [])
 
-  const [investorStats, setInvestorStats] = useState({})
-
   const loadInvestors = async () => {
     try {
       const response = await api.get('/investors', {
