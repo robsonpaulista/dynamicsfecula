@@ -51,9 +51,24 @@ export async function POST(request) {
     const { email, password } = loginSchema.parse(body)
 
     // Buscar usuário
-    const user = await prisma.user.findUnique({
-      where: { email },
-    })
+    let user
+    try {
+      user = await prisma.user.findUnique({
+        where: { email },
+      })
+    } catch (dbError) {
+      console.error('Erro ao buscar usuário no banco:', dbError)
+      return secureJsonResponse(
+        { 
+          success: false, 
+          error: { 
+            message: 'Erro ao conectar com o banco de dados', 
+            code: 'DATABASE_ERROR' 
+          } 
+        },
+        500
+      )
+    }
 
     if (!user || !user.isActive) {
       // Não revelar se o usuário existe ou não por segurança
@@ -64,7 +79,23 @@ export async function POST(request) {
     }
 
     // Verificar senha
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash)
+    let isValidPassword
+    try {
+      isValidPassword = await bcrypt.compare(password, user.passwordHash)
+    } catch (bcryptError) {
+      console.error('Erro ao comparar senha:', bcryptError)
+      return secureJsonResponse(
+        { 
+          success: false, 
+          error: { 
+            message: 'Erro ao verificar senha', 
+            code: 'BCRYPT_ERROR' 
+          } 
+        },
+        500
+      )
+    }
+
     if (!isValidPassword) {
       return secureJsonResponse(
         { success: false, error: { message: 'Credenciais inválidas', code: 'UNAUTHORIZED' } },
@@ -73,11 +104,26 @@ export async function POST(request) {
     }
 
     // Gerar token
-    const token = signSync(
-      { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    )
+    let token
+    try {
+      token = signSync(
+        { id: user.id, email: user.email, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      )
+    } catch (jwtError) {
+      console.error('Erro ao gerar token JWT:', jwtError)
+      return secureJsonResponse(
+        { 
+          success: false, 
+          error: { 
+            message: 'Erro ao gerar token de autenticação', 
+            code: 'JWT_ERROR' 
+          } 
+        },
+        500
+      )
+    }
 
     // Log de auditoria (opcional - não quebra o login se falhar)
     try {
