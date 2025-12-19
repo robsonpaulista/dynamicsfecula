@@ -5,7 +5,8 @@ import api from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, Search, DollarSign, Edit, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Search, DollarSign, Edit, Trash2, Loader2, Eye } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
 
@@ -14,11 +15,14 @@ export default function InvestorsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [deletingId, setDeletingId] = useState(null)
+  const [investorStats, setInvestorStats] = useState({})
   const { toast } = useToast()
 
   useEffect(() => {
     loadInvestors()
   }, [])
+
+  const [investorStats, setInvestorStats] = useState({})
 
   const loadInvestors = async () => {
     try {
@@ -29,6 +33,25 @@ export default function InvestorsPage() {
         !search || inv.name.toLowerCase().includes(search.toLowerCase())
       )
       setInvestors(filtered)
+
+      // Carregar estatísticas de investimento para cada investidor
+      const statsPromises = filtered.map(async (investor) => {
+        try {
+          const paymentsRes = await api.get(`/investors/${investor.id}/payments`)
+          const total = paymentsRes.data.data.summary.totalInvested
+          const count = paymentsRes.data.data.summary.totalAccounts
+          return { id: investor.id, total, count }
+        } catch {
+          return { id: investor.id, total: 0, count: 0 }
+        }
+      })
+
+      const stats = await Promise.all(statsPromises)
+      const statsMap = {}
+      stats.forEach(stat => {
+        statsMap[stat.id] = { total: stat.total, count: stat.count }
+      })
+      setInvestorStats(statsMap)
     } catch (error) {
       console.error('Erro ao carregar investidores:', error)
       toast({
@@ -146,6 +169,17 @@ export default function InvestorsPage() {
                         <span className="font-medium">Email:</span> {investor.email}
                       </p>
                     )}
+                    {investorStats[investor.id] && (
+                      <div className="mt-3 p-3 bg-[#00B299]/5 rounded-lg border border-[#00B299]/20">
+                        <p className="text-xs text-gray-600 mb-1">Total Investido</p>
+                        <p className="text-lg font-bold text-[#00B299]">
+                          {formatCurrency(investorStats[investor.id].total)}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {investorStats[investor.id].count} {investorStats[investor.id].count === 1 ? 'conta paga' : 'contas pagas'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
                     <Button
@@ -154,9 +188,19 @@ export default function InvestorsPage() {
                       asChild
                       className="flex-1 hover:bg-[#00B299]/10"
                     >
+                      <Link href={`/dashboard/investors/${investor.id}/details`}>
+                        <Eye className="h-4 w-4 mr-2" />
+                        Detalhes
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className="hover:bg-blue-50 hover:text-blue-600"
+                    >
                       <Link href={`/dashboard/investors/${investor.id}`}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Editar
+                        <Edit className="h-4 w-4" />
                       </Link>
                     </Button>
                     <Button
