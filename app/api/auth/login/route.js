@@ -17,6 +17,21 @@ const loginRateLimit = rateLimit(5, 60000)
 
 export async function POST(request) {
   try {
+    // Verificar JWT_SECRET
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET não está configurado')
+      return secureJsonResponse(
+        { 
+          success: false, 
+          error: { 
+            message: 'Erro de configuração do servidor', 
+            code: 'CONFIG_ERROR' 
+          } 
+        },
+        500
+      )
+    }
+
     // Rate limiting
     const rateLimitResult = loginRateLimit(request)
     if (!rateLimitResult.allowed) {
@@ -35,6 +50,7 @@ export async function POST(request) {
     const body = await request.json()
     const { email, password } = loginSchema.parse(body)
 
+    // Buscar usuário
     const user = await prisma.user.findUnique({
       where: { email },
     })
@@ -47,6 +63,7 @@ export async function POST(request) {
       )
     }
 
+    // Verificar senha
     const isValidPassword = await bcrypt.compare(password, user.passwordHash)
     if (!isValidPassword) {
       return secureJsonResponse(
@@ -55,21 +72,27 @@ export async function POST(request) {
       )
     }
 
+    // Gerar token
     const token = signSync(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     )
 
-    // Log de auditoria
-    await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        action: 'LOGIN',
-        entity: 'auth',
-        metadataJson: { email },
-      },
-    })
+    // Log de auditoria (opcional - não quebra o login se falhar)
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: 'LOGIN',
+          entity: 'auth',
+          metadataJson: { email },
+        },
+      })
+    } catch (auditError) {
+      // Log o erro mas não quebra o login
+      console.error('Erro ao criar log de auditoria:', auditError)
+    }
 
     return secureJsonResponse({
       success: true,
@@ -91,17 +114,32 @@ export async function POST(request) {
       )
     }
 
-    // Não expor detalhes do erro em produção
-    const errorMessage = process.env.NODE_ENV === 'production' 
-      ? 'Erro ao fazer login' 
-      : error.message
+    // Log detalhado do erro para debug
+    console.error('Erro no login:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      // Não logar dados sensíveis
+    })
 
-    // Log apenas em desenvolvimento
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('Login error:', error)
-    }
+    // Em produção, não expor detalhes do erro
+    const errorMessage = process.env.NODE_ENV === 'production' 
+      ? 'Erro ao fazer login. Verifique as credenciais.' 
+      : `Erro: ${error.message}`
+
     return secureJsonResponse(
-      { success: false, error: { message: errorMessage, code: 'INTERNAL_ERROR' } },
+      { 
+        success: false, 
+        error: { 
+          message: errorMessage, 
+          code: 'INTERNAL_ERROR',
+          // Apenas em desenvolvimento
+          ...(process.env.NODE_ENV !== 'production' && { 
+            details: error.message,
+            stack: error.stack 
+          })
+        } 
+      },
       500
     )
   }
