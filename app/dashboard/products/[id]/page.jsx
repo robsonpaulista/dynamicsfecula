@@ -193,9 +193,21 @@ export default function ProductDetailPage() {
                       >
                         <div className="flex-1">
                           <p className="font-semibold text-gray-900">{getMovementTypeLabel(movement.type)}</p>
-                          <p className="text-xs text-gray-600 flex items-center gap-2 mt-1">
+                          <p className="text-xs text-gray-600 flex items-center gap-2 mt-1 flex-wrap">
                             <Calendar className="h-3 w-3" />
                             {formatDate(movement.createdAt)}
+                            {movement.reference?.supplier && (
+                              <>
+                                <span className="mx-1">•</span>
+                                <span className="text-blue-600 font-medium">Fornecedor: {movement.reference.supplier.name}</span>
+                              </>
+                            )}
+                            {movement.reference?.customer && (
+                              <>
+                                <span className="mx-1">•</span>
+                                <span className="text-purple-600 font-medium">Cliente: {movement.reference.customer.name}</span>
+                              </>
+                            )}
                             {movement.createdBy && (
                               <>
                                 <span className="mx-1">•</span>

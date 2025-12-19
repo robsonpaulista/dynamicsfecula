@@ -36,6 +36,56 @@ export async function GET(request, { params }) {
       )
     }
 
+    // Buscar informações de cliente/fornecedor para cada movimentação
+    const movementsWithReferences = await Promise.all(
+      product.stockMovements.map(async (movement) => {
+        let reference = null
+        
+        if (movement.referenceType === 'PURCHASE' && movement.referenceId) {
+          const purchaseOrder = await prisma.purchaseOrder.findUnique({
+            where: { id: movement.referenceId },
+            include: {
+              supplier: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          })
+          if (purchaseOrder) {
+            reference = {
+              type: 'PURCHASE',
+              supplier: purchaseOrder.supplier,
+            }
+          }
+        } else if (movement.referenceType === 'SALE' && movement.referenceId) {
+          const salesOrder = await prisma.salesOrder.findUnique({
+            where: { id: movement.referenceId },
+            include: {
+              customer: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          })
+          if (salesOrder) {
+            reference = {
+              type: 'SALE',
+              customer: salesOrder.customer,
+            }
+          }
+        }
+        
+        return {
+          ...movement,
+          reference,
+        }
+      })
+    )
+
     // Serializar movimentações também
     const serializedProduct = {
       ...product,
@@ -46,10 +96,10 @@ export async function GET(request, { params }) {
         ...product.stockBalance,
         quantity: Number(product.stockBalance.quantity),
       } : null,
-      stockMovements: product.stockMovements?.map(movement => ({
+      stockMovements: movementsWithReferences.map(movement => ({
         ...movement,
         quantity: Number(movement.quantity),
-      })) || [],
+      })),
     }
 
     return NextResponse.json({
