@@ -19,6 +19,7 @@ export async function GET(request) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '100')
     const isActive = searchParams.get('isActive')
+    const includeStats = searchParams.get('includeStats') === 'true'
     const skip = (page - 1) * limit
 
     const where = {}
@@ -32,13 +33,38 @@ export async function GET(request) {
         skip,
         take: limit,
         orderBy: { name: 'asc' },
+        include: includeStats ? {
+          paymentSources: {
+            select: {
+              amount: true,
+            },
+          },
+        } : undefined,
       }),
       prisma.investor.count({ where }),
     ])
 
+    // Calcular estatísticas se solicitado
+    const investorsWithStats = includeStats ? investors.map(investor => {
+      const totalInvested = investor.paymentSources?.reduce(
+        (sum, ps) => sum + Number(ps.amount),
+        0
+      ) || 0
+      const totalAccounts = investor.paymentSources?.length || 0
+
+      return {
+        ...investor,
+        stats: {
+          totalInvested,
+          totalAccounts,
+        },
+        paymentSources: undefined, // Remover do response
+      }
+    }) : investors
+
     return NextResponse.json({
       success: true,
-      data: investors,
+      data: investorsWithStats,
       pagination: {
         page,
         limit,

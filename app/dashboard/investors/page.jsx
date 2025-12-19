@@ -25,29 +25,22 @@ export default function InvestorsPage() {
   const loadInvestors = async () => {
     try {
       const response = await api.get('/investors', {
-        params: { isActive: 'true', limit: 100 },
+        params: { isActive: 'true', limit: 100, includeStats: 'true' },
       })
       const filtered = response.data.data.filter(inv => 
         !search || inv.name.toLowerCase().includes(search.toLowerCase())
       )
       setInvestors(filtered)
 
-      // Carregar estatísticas de investimento para cada investidor
-      const statsPromises = filtered.map(async (investor) => {
-        try {
-          const paymentsRes = await api.get(`/investors/${investor.id}/payments`)
-          const total = paymentsRes.data.data.summary.totalInvested
-          const count = paymentsRes.data.data.summary.totalAccounts
-          return { id: investor.id, total, count }
-        } catch {
-          return { id: investor.id, total: 0, count: 0 }
-        }
-      })
-
-      const stats = await Promise.all(statsPromises)
+      // Extrair estatísticas da resposta
       const statsMap = {}
-      stats.forEach(stat => {
-        statsMap[stat.id] = { total: stat.total, count: stat.count }
+      filtered.forEach(investor => {
+        if (investor.stats) {
+          statsMap[investor.id] = {
+            total: investor.stats.totalInvested,
+            count: investor.stats.totalAccounts,
+          }
+        }
       })
       setInvestorStats(statsMap)
     } catch (error) {
