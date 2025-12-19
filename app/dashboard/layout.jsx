@@ -42,6 +42,7 @@ export default function DashboardLayout({ children }) {
     { href: '/dashboard/purchases', label: 'Compras', icon: ShoppingCart },
     { href: '/dashboard/sales', label: 'Vendas', icon: ShoppingCart },
     { href: '/dashboard/finance', label: 'Financeiro', icon: DollarSign },
+    { href: '/dashboard/investors', label: 'Investidores', icon: DollarSign },
     { href: '/dashboard/users', label: 'Usuários', icon: Users },
   ]
 

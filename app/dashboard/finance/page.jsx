@@ -13,11 +13,12 @@ import { useToast } from '@/hooks/use-toast'
 export default function FinancePage() {
   const [accountsPayable, setAccountsPayable] = useState([])
   const [accountsReceivable, setAccountsReceivable] = useState([])
+  const [investors, setInvestors] = useState([])
   const [loading, setLoading] = useState(true)
   const [processingAccount, setProcessingAccount] = useState(null)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState(null)
-  const [paymentSources, setPaymentSources] = useState([{ name: '', amount: '' }])
+  const [paymentSources, setPaymentSources] = useState([{ investorId: '', amount: '' }])
   const { toast } = useToast()
 
   useEffect(() => {
@@ -29,12 +30,14 @@ export default function FinancePage() {
 
   const loadFinance = async () => {
     try {
-      const [apResponse, arResponse] = await Promise.all([
+      const [apResponse, arResponse, investorsResponse] = await Promise.all([
         api.get('/finance/ap'),
         api.get('/finance/ar'),
+        api.get('/investors', { params: { isActive: 'true', limit: 100 } }),
       ])
       setAccountsPayable(apResponse.data.data)
       setAccountsReceivable(arResponse.data.data)
+      setInvestors(investorsResponse.data.data || [])
     } catch (error) {
       console.error('Erro ao carregar financeiro:', error)
     } finally {
@@ -52,18 +55,18 @@ export default function FinancePage() {
 
   const openPaymentModal = (account) => {
     setSelectedAccount(account)
-    setPaymentSources([{ name: '', amount: '' }])
+    setPaymentSources([{ investorId: '', amount: '' }])
     setShowPaymentModal(true)
   }
 
   const closePaymentModal = () => {
     setShowPaymentModal(false)
     setSelectedAccount(null)
-    setPaymentSources([{ name: '', amount: '' }])
+    setPaymentSources([{ investorId: '', amount: '' }])
   }
 
   const addPaymentSource = () => {
-    setPaymentSources([...paymentSources, { name: '', amount: '' }])
+    setPaymentSources([...paymentSources, { investorId: '', amount: '' }])
   }
 
   const removePaymentSource = (index) => {
@@ -82,7 +85,7 @@ export default function FinancePage() {
     if (!selectedAccount) return
 
     // Validar fontes pagadoras
-    const validSources = paymentSources.filter(ps => ps.name.trim() && ps.amount)
+    const validSources = paymentSources.filter(ps => ps.investorId && ps.amount)
     if (validSources.length === 0) {
       toast({
         title: 'Erro',
@@ -109,7 +112,7 @@ export default function FinancePage() {
       await api.post(`/finance/ap/${selectedAccount.id}/pay`, {
         paidAt: new Date().toISOString(),
         paymentSources: validSources.map(ps => ({
-          name: ps.name.trim(),
+          investorId: ps.investorId,
           amount: parseFloat(ps.amount),
         })),
       })
@@ -276,7 +279,7 @@ export default function FinancePage() {
                           <p className="font-semibold">Fontes pagadoras:</p>
                           {ap.paymentSources.map((ps, idx) => (
                             <p key={idx} className="text-gray-500">
-                              {ps.name}: {formatCurrency(Number(ps.amount))}
+                              {ps.investor?.name || 'N/A'}: {formatCurrency(Number(ps.amount))}
                             </p>
                           ))}
                         </div>
@@ -384,13 +387,25 @@ export default function FinancePage() {
                   {paymentSources.map((source, index) => (
                     <div key={index} className="flex gap-2 items-start p-3 bg-gray-50 rounded-lg">
                       <div className="flex-1 space-y-2">
-                        <Label htmlFor={`source-name-${index}`} className="text-xs">Nome da Fonte Pagadora *</Label>
-                        <Input
-                          id={`source-name-${index}`}
-                          placeholder="Ex: Sócio João, Investidor XYZ..."
-                          value={source.name}
-                          onChange={(e) => updatePaymentSource(index, 'name', e.target.value)}
-                        />
+                        <Label htmlFor={`source-investor-${index}`} className="text-xs">Investidor / Fonte Pagadora *</Label>
+                        <select
+                          id={`source-investor-${index}`}
+                          value={source.investorId}
+                          onChange={(e) => updatePaymentSource(index, 'investorId', e.target.value)}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          <option value="">Selecione um investidor</option>
+                          {investors.map((investor) => (
+                            <option key={investor.id} value={investor.id}>
+                              {investor.name}
+                            </option>
+                          ))}
+                        </select>
+                        {investors.length === 0 && (
+                          <p className="text-xs text-orange-600">
+                            Nenhum investidor cadastrado. <Link href="/dashboard/investors/new" className="underline">Cadastrar agora</Link>
+                          </p>
+                        )}
                       </div>
                       <div className="w-32 space-y-2">
                         <Label htmlFor={`source-amount-${index}`} className="text-xs">Valor *</Label>

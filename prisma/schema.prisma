@@ -210,6 +210,20 @@ model PaymentMethod {
   @@map("payment_methods")
 }
 
+model Investor {
+  id              String          @id @default(uuid())
+  name            String
+  document        String?
+  phone           String?
+  email           String?
+  isActive        Boolean         @default(true) @map("is_active")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  paymentSources  PaymentSource[]
+
+  @@map("investors")
+}
+
 model AccountsPayable {
   id              String         @id @default(uuid())
   supplierId      String?        @map("supplier_id")
@@ -237,12 +251,14 @@ model AccountsPayable {
 model PaymentSource {
   id              String          @id @default(uuid())
   accountsPayableId String        @map("accounts_payable_id")
-  name            String
+  investorId     String?         @map("investor_id")
   amount          Decimal         @db.Decimal(10, 2)
   createdAt       DateTime        @default(now()) @map("created_at")
   accountsPayable AccountsPayable @relation(fields: [accountsPayableId], references: [id], onDelete: Cascade)
+  investor        Investor?       @relation(fields: [investorId], references: [id], onDelete: SetNull)
 
   @@index([accountsPayableId])
+  @@index([investorId])
   @@map("payment_sources")
 }
 

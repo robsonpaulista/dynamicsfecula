@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { Decimal } from '@prisma/client/runtime/library'
 
 const paymentSourceSchema = z.object({
-  name: z.string().min(1, 'Nome da fonte pagadora é obrigatório'),
+  investorId: z.string().min(1, 'Investidor é obrigatório'),
   amount: z.number().min(0.01, 'Valor deve ser maior que zero'),
 })
 
@@ -61,6 +61,28 @@ export async function POST(request, { params }) {
           { status: 400 }
         )
       }
+
+      // Validar se todos os investidores existem e estão ativos
+      const investorIds = paymentSources.map(ps => ps.investorId)
+      const investors = await prisma.investor.findMany({
+        where: {
+          id: { in: investorIds },
+          isActive: true,
+        },
+      })
+
+      if (investors.length !== investorIds.length) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: { 
+              message: 'Um ou mais investidores não foram encontrados ou estão inativos', 
+              code: 'BAD_REQUEST' 
+            } 
+          },
+          { status: 400 }
+        )
+      }
     }
 
     // Atualizar conta e criar fontes pagadoras
@@ -72,13 +94,22 @@ export async function POST(request, { params }) {
         paymentMethodId: paymentMethodId || null,
         paymentSources: paymentSources && paymentSources.length > 0 ? {
           create: paymentSources.map(source => ({
-            name: source.name,
+            investorId: source.investorId,
             amount: new Decimal(source.amount),
           })),
         } : undefined,
       },
       include: {
-        paymentSources: true,
+        paymentSources: {
+          include: {
+            investor: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     })
 
@@ -104,6 +135,7 @@ export async function POST(request, { params }) {
         paymentSources: updatedAccount.paymentSources?.map(ps => ({
           ...ps,
           amount: Number(ps.amount),
+          investor: ps.investor,
         })) || [],
       },
       message: 'Conta paga e registrada no fluxo de caixa',

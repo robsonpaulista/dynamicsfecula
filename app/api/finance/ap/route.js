@@ -40,10 +40,13 @@ export async function GET(request) {
             },
           },
           paymentSources: {
-            select: {
-              id: true,
-              name: true,
-              amount: true,
+            include: {
+              investor: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
         },
@@ -60,6 +63,7 @@ export async function GET(request) {
         paymentSources: ap.paymentSources?.map(ps => ({
           ...ps,
           amount: Number(ps.amount),
+          investor: ps.investor,
         })) || [],
       })),
       pagination: {
