@@ -65,27 +65,19 @@ export default function NewSalesPage() {
 
   const loadData = async () => {
     try {
-      const [customersRes, productsRes] = await Promise.all([
+      const [customersRes, productsRes, paymentMethodsRes] = await Promise.all([
         api.get('/customers', { params: { limit: 100, isActive: 'true' } }),
         api.get('/products', { params: { limit: 100, isActive: 'true' } }),
+        api.get('/payment-methods'),
       ])
       setCustomers(customersRes.data.data)
       setProducts(productsRes.data.data)
-      
-      // Buscar formas de pagamento do Prisma diretamente (ou criar API se necessário)
-      // Por enquanto, vamos usar valores padrão
-      setPaymentMethods([
-        { id: 'pix', name: 'PIX' },
-        { id: 'dinheiro', name: 'Dinheiro' },
-        { id: 'cartao', name: 'Cartão' },
-        { id: 'boleto', name: 'Boleto' },
-        { id: 'transferencia', name: 'Transferência' },
-      ])
+      setPaymentMethods(paymentMethodsRes.data.data || [])
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
       toast({
         title: 'Erro',
-        description: 'Erro ao carregar clientes e produtos',
+        description: 'Erro ao carregar dados. Verifique se o seed foi executado.',
         variant: 'destructive',
       })
     } finally {
@@ -165,7 +157,10 @@ export default function NewSalesPage() {
         dueDate: inst.dueDate,
         amount: parseFloat(inst.amount) || 0,
         description: inst.description || undefined,
-        paymentMethodId: inst.paymentMethodId || undefined,
+        // Só incluir paymentMethodId se não for vazio
+        paymentMethodId: inst.paymentMethodId && inst.paymentMethodId.trim() !== '' 
+          ? inst.paymentMethodId 
+          : undefined,
       }))
 
       // Validar valores
