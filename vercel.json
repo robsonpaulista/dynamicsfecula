@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run vercel-build",
+  "framework": "nextjs",
+  "regions": ["gru1"],
+  "functions": {
+    "app/api/**/*.js": {
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "PRISMA_GENERATE_DATAPROXY": "true"
+  }
+}
