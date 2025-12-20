@@ -163,20 +163,44 @@ export default function FinancePage() {
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-[#00B299]">
             Financeiro
           </h1>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadFinance}
-            disabled={loading}
-            className="hover:bg-purple-50"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Atualizar
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="hover:bg-red-50 border-red-200 text-red-700"
+            >
+              <Link href="/dashboard/finance/expenses/new">
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Despesa
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="hover:bg-green-50 border-green-200 text-green-700"
+            >
+              <Link href="/dashboard/finance/income/new">
+                <Plus className="h-4 w-4 mr-2" />
+                Nova Receita
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadFinance}
+              disabled={loading}
+              className="hover:bg-purple-50"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
