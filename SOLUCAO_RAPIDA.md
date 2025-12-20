@@ -69,3 +69,4 @@ Mas isso pode dar timeout novamente devido ao Supabase.
 
 
 
+

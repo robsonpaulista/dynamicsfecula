@@ -71,3 +71,4 @@ Running "npm run vercel-build"
 ```
 
 Se ainda der erro, verifique se há algum subdiretório configurado incorretamente.
+

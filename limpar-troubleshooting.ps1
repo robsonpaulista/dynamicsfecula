@@ -33,3 +33,4 @@ Write-Host "2. git commit -m 'Limpar arquivos de troubleshooting'"
 Write-Host "3. git push origin main"
 
 
+

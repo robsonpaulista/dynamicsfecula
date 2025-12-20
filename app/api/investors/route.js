@@ -91,8 +91,44 @@ export async function GET(request) {
       },
     })
   } catch (error) {
+    console.error('Erro em GET /api/investors:', error)
+    
+    // Tratamento específico para erros do Prisma
+    if (error.code === 'P1001' || error.message?.includes('Can\'t reach database')) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: { 
+            message: 'Erro de conexão com o banco de dados. Verifique a configuração.', 
+            code: 'DATABASE_CONNECTION_ERROR' 
+          } 
+        },
+        { status: 503 }
+      )
+    }
+    
+    if (error.code === 'P2025' || error.message?.includes('Record to update not found')) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: { 
+            message: 'Registro não encontrado', 
+            code: 'NOT_FOUND' 
+          } 
+        },
+        { status: 404 }
+      )
+    }
+
     return NextResponse.json(
-      { success: false, error: { message: error.message, code: 'ERROR' } },
+      { 
+        success: false, 
+        error: { 
+          message: process.env.NODE_ENV === 'development' ? error.message : 'Erro ao buscar investidores', 
+          code: 'ERROR',
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        } 
+      },
       { status: error.statusCode || 500 }
     )
   }

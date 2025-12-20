@@ -153,3 +153,4 @@ O `vercel.json` está configurado para usar a região **gru1** (São Paulo, Bras
 - ⏳ Aguardando execução de migrations
 
 **O projeto está pronto para deploy!** 🚀
+

@@ -103,3 +103,4 @@ git push origin main
 Se o terminal continuar travando, feche e abra um novo terminal, depois tente os comandos novamente.
 
 
+

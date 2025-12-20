@@ -214,3 +214,4 @@ Depois que as migrations estiverem executadas e o seed rodado:
 ---
 
 **🎉 Pronto!** Após seguir esses passos, seu app estará funcionando no Vercel!
+

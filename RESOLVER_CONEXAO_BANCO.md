@@ -173,3 +173,4 @@ Se não souber a senha do banco:
 ---
 
 **Após seguir esses passos, a conexão deve funcionar!** 🎉
+

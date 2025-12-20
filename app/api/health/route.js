@@ -83,3 +83,4 @@ export async function GET() {
     status: health.status === 'ok' ? 200 : 500,
   })
 }
+

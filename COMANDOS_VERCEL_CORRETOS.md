@@ -172,3 +172,4 @@ npm run db:migrate:deploy
 4. Teste localmente com as mesmas variáveis de ambiente
 
 
+

@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import { Decimal } from '@prisma/client/runtime/library'
 import { prisma } from '@/lib/prisma'
-import { authenticate } from '@/middleware/auth'
+import { authenticate, authorize } from '@/middleware/auth'
+
+const createAccountReceivableSchema = z.object({
+  description: z.string().min(1, 'Descrição é obrigatória'),
+  customerId: z.string().optional(),
+  categoryId: z.string().optional(),
+  dueDate: z.string().or(z.date()),
+  amount: z.number().min(0.01, 'Valor deve ser maior que zero'),
+})
 
 export async function GET(request) {
   try {
@@ -59,8 +69,31 @@ export async function GET(request) {
       },
     })
   } catch (error) {
+    console.error('Erro em GET /api/finance/ar:', error)
+    
+    // Tratamento específico para erros do Prisma
+    if (error.code === 'P1001' || error.message?.includes('Can\'t reach database')) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: { 
+            message: 'Erro de conexão com o banco de dados. Verifique a configuração.', 
+            code: 'DATABASE_CONNECTION_ERROR' 
+          } 
+        },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json(
-      { success: false, error: { message: error.message, code: 'ERROR' } },
+      { 
+        success: false, 
+        error: { 
+          message: process.env.NODE_ENV === 'development' ? error.message : 'Erro ao buscar contas a receber', 
+          code: 'ERROR',
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        } 
+      },
       { status: error.statusCode || 500 }
     )
   }
@@ -134,6 +167,8 @@ export async function POST(request) {
       },
     }, { status: 201 })
   } catch (error) {
+    console.error('Erro em POST /api/finance/ar:', error)
+    
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { success: false, error: { message: error.errors[0].message, code: 'VALIDATION_ERROR' } },
@@ -141,8 +176,29 @@ export async function POST(request) {
       )
     }
 
+    // Tratamento específico para erros do Prisma
+    if (error.code === 'P1001' || error.message?.includes('Can\'t reach database')) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: { 
+            message: 'Erro de conexão com o banco de dados. Verifique a configuração.', 
+            code: 'DATABASE_CONNECTION_ERROR' 
+          } 
+        },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json(
-      { success: false, error: { message: error.message, code: 'ERROR' } },
+      { 
+        success: false, 
+        error: { 
+          message: process.env.NODE_ENV === 'development' ? error.message : 'Erro ao criar conta a receber', 
+          code: 'ERROR',
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        } 
+      },
       { status: error.statusCode || 500 }
     )
   }

@@ -143,3 +143,4 @@ Após o deploy, teste:
 **A correção principal foi especificar `buildCommand: "npm run build"` no `vercel.json` para forçar o uso do comando correto.**
 
 
+

@@ -117,3 +117,4 @@ O erro `404: NOT_FOUND` geralmente ocorre quando:
 Sempre verifique os **logs do build** no Vercel primeiro!
 
 
+

@@ -114,3 +114,4 @@ O `vercel.json` estava sendo ignorado pelo Vercel. Configurando diretamente no d
 **Após configurar no dashboard, faça um novo deploy e verifique os logs!**
 
 
+

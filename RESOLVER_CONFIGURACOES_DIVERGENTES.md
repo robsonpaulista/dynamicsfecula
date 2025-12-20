@@ -87,3 +87,4 @@ Se ainda aparecer `vercel build`, o `vercel.json` não está sendo respeitado e 
 ---
 
 **A solução é fazer um novo deploy após configurar no dashboard!**
+

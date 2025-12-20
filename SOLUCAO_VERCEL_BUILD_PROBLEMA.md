@@ -79,3 +79,4 @@ Se ainda aparecer `vercel build` nos logs:
 ---
 
 **A chave é remover o `framework` do vercel.json para evitar o build interno do Vercel!**
+

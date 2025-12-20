@@ -76,3 +76,4 @@ npm run db:seed
 ---
 
 **Nota:** O Prisma Client será gerado automaticamente durante o build via `postinstall` e `vercel-build`. As migrations devem ser executadas manualmente após cada deploy que incluir novas migrations.
+

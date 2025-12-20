@@ -236,3 +236,4 @@ O erro 404 geralmente significa que:
 **Sempre comece verificando os Build Logs no Vercel!**
 
 
+
