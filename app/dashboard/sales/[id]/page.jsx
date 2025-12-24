@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ArrowLeft, ShoppingCart, Calendar, User, Package, DollarSign, Loader2, Edit, X, Trash2, CheckCircle, Truck } from 'lucide-react'
+import { ArrowLeft, ShoppingCart, Calendar, User, Package, DollarSign, Loader2, Edit, X, Trash2, CheckCircle, Truck, FileText, Printer } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
+import { saveSalesOrderPDF, printSalesOrder } from '@/lib/pdf'
 
 export default function SalesDetailPage() {
   const params = useParams()
@@ -199,13 +200,31 @@ export default function SalesDetailPage() {
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-6">
+        <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <Button variant="ghost" asChild className="hover:bg-[#00B299]/10">
             <Link href="/dashboard/sales">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Link>
           </Button>
+          <div className="flex gap-2 ml-auto">
+            <Button
+              variant="outline"
+              onClick={() => saveSalesOrderPDF(salesOrder)}
+              className="hover:bg-[#00B299]/10 hover:border-[#00B299] transition-all"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Salvar PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => printSalesOrder(salesOrder)}
+              className="hover:bg-[#00B299]/10 hover:border-[#00B299] transition-all"
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
@@ -496,6 +515,8 @@ export default function SalesDetailPage() {
     </div>
   )
 }
+
+
 
 
 
