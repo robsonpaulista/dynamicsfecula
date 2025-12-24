@@ -20,7 +20,7 @@ export default function SalesDetailPage() {
   const [salesOrder, setSalesOrder] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editingAccountReceivable, setEditingAccountReceivable] = useState(null)
-  const [editingAccountData, setEditingAccountData] = useState({ description: '', dueDate: '', amount: '' })
+  const [editingAccountData, setEditingAccountData] = useState({ description: '', dueDate: '', amount: '', paymentDays: '' })
   const [savingAccount, setSavingAccount] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(null)
   const [deliveringOrder, setDeliveringOrder] = useState(false)
@@ -76,12 +76,13 @@ export default function SalesDetailPage() {
       description: account.description,
       dueDate: account.dueDate ? new Date(account.dueDate).toISOString().split('T')[0] : '',
       amount: Number(account.amount).toString(),
+      paymentDays: account.paymentDays ? account.paymentDays.toString() : '',
     })
   }
 
   const closeEditAccountReceivableModal = () => {
     setEditingAccountReceivable(null)
-    setEditingAccountData({ description: '', dueDate: '', amount: '' })
+    setEditingAccountData({ description: '', dueDate: '', amount: '', paymentDays: '' })
   }
 
   const handleUpdateAccountReceivable = async () => {
@@ -120,6 +121,7 @@ export default function SalesDetailPage() {
         description: editingAccountData.description,
         dueDate: editingAccountData.dueDate,
         amount: newAmount,
+        paymentDays: editingAccountData.paymentDays ? parseInt(editingAccountData.paymentDays) : null,
       })
       toast({
         title: 'Sucesso!',
@@ -466,7 +468,8 @@ export default function SalesDetailPage() {
                         <div className="flex-1 min-w-0 w-full sm:w-auto">
                           <p className="font-semibold text-gray-900 break-words">{ar.description}</p>
                           <p className="text-xs text-gray-600 mt-1 break-words">
-                            Vencimento: {formatDate(ar.dueDate)} • Status: {ar.status}
+                            Vencimento: {formatDate(ar.dueDate)}
+                            {ar.paymentDays ? ` • Prazo: ${ar.paymentDays} dias` : ''} • Status: {ar.status}
                           </p>
                         </div>
                         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
@@ -837,6 +840,22 @@ export default function SalesDetailPage() {
                   onChange={(e) => setEditingAccountData({ ...editingAccountData, amount: e.target.value })}
                   placeholder="0.00"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-ar-paymentDays">Prazo em Dias (opcional)</Label>
+                <Input
+                  id="edit-ar-paymentDays"
+                  type="number"
+                  step="1"
+                  min="1"
+                  value={editingAccountData.paymentDays}
+                  onChange={(e) => setEditingAccountData({ ...editingAccountData, paymentDays: e.target.value })}
+                  placeholder="Ex: 30, 60, 90"
+                />
+                <p className="text-xs text-gray-600">
+                  Número de dias para pagamento a partir da data da venda
+                </p>
               </div>
 
               <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 pt-4 border-t">

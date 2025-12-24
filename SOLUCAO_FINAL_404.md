@@ -78,3 +78,5 @@ E depois:
 
 **A chave é REMOVER o Framework Preset no dashboard e usar `npm run vercel-build` explicitamente!**
 
+
+

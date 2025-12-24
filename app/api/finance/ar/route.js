@@ -10,6 +10,7 @@ const createAccountReceivableSchema = z.object({
   categoryId: z.string().optional(),
   dueDate: z.string().or(z.date()),
   amount: z.number().min(0.01, 'Valor deve ser maior que zero'),
+  paymentDays: z.number().int().positive().optional(),
 })
 
 export async function GET(request) {
@@ -141,6 +142,7 @@ export async function POST(request) {
         categoryId: data.categoryId || null,
         dueDate: new Date(data.dueDate),
         amount: new Decimal(data.amount),
+        paymentDays: data.paymentDays || null,
         status: 'OPEN',
       },
       include: {
@@ -203,6 +205,8 @@ export async function POST(request) {
     )
   }
 }
+
+
 
 
 

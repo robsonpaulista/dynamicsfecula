@@ -130,3 +130,5 @@ Após identificar o problema específico:
 
 **Nota:** Os logs agora são mais detalhados. Verifique os Function Logs no Vercel para ver o erro específico.
 
+
+

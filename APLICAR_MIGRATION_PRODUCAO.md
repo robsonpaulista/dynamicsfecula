@@ -55,3 +55,5 @@ O banco de **produção** do Vercel pode estar diferente!
 - [ ] Obter connection string de produção do Vercel
 - [ ] Aplicar migration no banco de produção
 - [ ] Verificar se o erro no Vercel foi resolvido
+
+

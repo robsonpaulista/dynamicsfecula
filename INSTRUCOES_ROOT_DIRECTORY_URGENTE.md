@@ -89,3 +89,5 @@ Se não encontrar o campo "Root Directory", pode ser que ele esteja oculto ou te
 
 **O problema é 100% o Root Directory configurado incorretamente no dashboard!**
 
+
+

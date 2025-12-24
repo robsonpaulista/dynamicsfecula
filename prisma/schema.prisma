@@ -275,6 +275,7 @@ model AccountsReceivable {
   categoryId      String?        @map("category_id")
   dueDate         DateTime       @map("due_date")
   amount          Decimal        @db.Decimal(10, 2)
+  paymentDays     Int?           @map("payment_days")
   status          AccountStatus  @default(OPEN)
   receivedAt      DateTime?      @map("received_at")
   paymentMethodId String?        @map("payment_method_id")

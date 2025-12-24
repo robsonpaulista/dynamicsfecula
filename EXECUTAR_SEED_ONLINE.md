@@ -135,3 +135,5 @@ Após executar o seed:
 
 **Nota:** As migrations agora são executadas automaticamente no build do Vercel. Você só precisa executar o seed uma vez após o primeiro deploy.
 
+
+

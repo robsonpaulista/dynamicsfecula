@@ -119,3 +119,5 @@ Se os problemas persistirem, considere:
 - Ou usar **Prisma Data Proxy** para melhor gerenciamento de conexões
 
 Mas primeiro, **aplique a migração** - esse é o problema principal agora.
+
+

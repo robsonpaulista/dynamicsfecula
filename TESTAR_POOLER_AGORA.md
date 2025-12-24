@@ -115,3 +115,5 @@ npx prisma db pull
 
 **O Connection Pooler geralmente resolve o problema de conexão no Vercel!** 🎯
 
+
+

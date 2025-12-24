@@ -58,3 +58,5 @@ Depois:
 npx vercel env pull .env.local
 npx prisma migrate deploy
 ```
+
+

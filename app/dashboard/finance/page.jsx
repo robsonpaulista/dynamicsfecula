@@ -335,7 +335,8 @@ export default function FinancePage() {
                     <div className="flex-1 min-w-0 w-full sm:w-auto">
                       <p className="font-semibold text-gray-900 break-words">{ar.description}</p>
                       <p className="text-xs md:text-sm text-gray-600 mt-1 break-words">
-                        {formatDate(ar.dueDate)} • {ar.customer?.name || '-'}
+                        {formatDate(ar.dueDate)}
+                        {ar.paymentDays ? ` • Prazo: ${ar.paymentDays} dias` : ''} • {ar.customer?.name || '-'}
                       </p>
                     </div>
                     <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">

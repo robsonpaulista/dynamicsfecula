@@ -120,3 +120,5 @@ Se não conseguir encontrar ou configurar o Root Directory:
 
 **O problema é 100% o Root Directory não estar vazio no dashboard do Vercel!**
 
+
+

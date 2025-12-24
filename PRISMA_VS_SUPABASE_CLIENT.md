@@ -118,3 +118,5 @@ Se quiser migrar, seria necessário:
 
 **Resumo:** O problema não é o Prisma em si, mas a configuração de rede/firewall do Supabase. Corrigir isso é mais rápido que migrar todo o código.
 
+
+

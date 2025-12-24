@@ -180,3 +180,5 @@ Usuário → Frontend → API Route → Prisma → PostgreSQL → Resposta
 
 
 
+
+

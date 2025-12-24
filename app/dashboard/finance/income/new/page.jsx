@@ -20,6 +20,7 @@ const incomeSchema = z.object({
   categoryId: z.string().min(1, 'Categoria é obrigatória'),
   dueDate: z.string().min(1, 'Data de vencimento é obrigatória'),
   amount: z.number().min(0.01, 'Valor deve ser maior que zero'),
+  paymentDays: z.number().int().positive().optional(),
 })
 
 export default function NewIncomePage() {
@@ -74,6 +75,7 @@ export default function NewIncomePage() {
         categoryId: data.categoryId,
         dueDate: data.dueDate,
         amount: data.amount,
+        paymentDays: data.paymentDays || null,
       })
       toast({
         title: 'Sucesso!',
@@ -201,6 +203,24 @@ export default function NewIncomePage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="paymentDays">Prazo em Dias (opcional)</Label>
+                <Input
+                  id="paymentDays"
+                  type="number"
+                  step="1"
+                  min="1"
+                  {...register('paymentDays', { valueAsNumber: true })}
+                  placeholder="Ex: 30, 60, 90"
+                />
+                <p className="text-xs text-gray-600">
+                  Número de dias para pagamento a partir da data da venda
+                </p>
+                {errors.paymentDays && (
+                  <p className="text-sm text-red-600">{errors.paymentDays.message}</p>
+                )}
+              </div>
+
               <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 pt-4 border-t">
                 <Button
                   type="button"
@@ -226,3 +246,5 @@ export default function NewIncomePage() {
     </div>
   )
 }
+
+

@@ -10,6 +10,7 @@ const updateAccountReceivableSchema = z.object({
   dueDate: z.string().or(z.date()).optional(),
   amount: z.number().min(0.01, 'Valor deve ser maior que zero').optional(),
   categoryId: z.string().nullable().optional(),
+  paymentDays: z.number().int().positive().nullable().optional(),
   status: z.enum(['OPEN', 'RECEIVED', 'CANCELED']).optional(),
 })
 
@@ -117,6 +118,7 @@ export async function PUT(request, { params }) {
     if (data.dueDate) updateData.dueDate = new Date(data.dueDate)
     if (data.amount !== undefined) updateData.amount = new Decimal(data.amount)
     if (data.categoryId !== undefined) updateData.categoryId = data.categoryId
+    if (data.paymentDays !== undefined) updateData.paymentDays = data.paymentDays
     if (data.status !== undefined) updateData.status = data.status
 
     // Se houver pedido relacionado, validar que o valor não excede o total do pedido
@@ -268,6 +270,8 @@ export async function DELETE(request, { params }) {
     )
   }
 }
+
+
 
 
 

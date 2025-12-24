@@ -119,3 +119,5 @@ Isso vai indicar o problema específico.
 
 **O erro truncado nos logs dificulta o diagnóstico. Verifique a mensagem completa nos Function Logs do Vercel!** 🔍
 
+
+

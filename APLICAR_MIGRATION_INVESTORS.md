@@ -48,3 +48,5 @@ Após aplicar a migration:
 1. O banco terá a nova estrutura (tabela `investors` e `payment_sources` com `investor_id`)
 2. O Prisma Client poderá se conectar normalmente
 3. O login e outras operações voltarão a funcionar
+
+

@@ -250,6 +250,18 @@ export async function POST(request) {
           categoryId = data.categoryId
         }
         
+        // Calcular prazo em dias se dueDate e saleDate estiverem disponíveis
+        let paymentDays = null
+        if (installment.dueDate && data.saleDate) {
+          const saleDate = new Date(data.saleDate)
+          const dueDate = new Date(installment.dueDate)
+          const diffTime = dueDate.getTime() - saleDate.getTime()
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+          if (diffDays > 0) {
+            paymentDays = diffDays
+          }
+        }
+
         await prisma.accountsReceivable.create({
           data: {
             customerId: data.customerId,
@@ -259,6 +271,7 @@ export async function POST(request) {
             amount: new Decimal(installment.amount),
             categoryId,
             paymentMethodId,
+            paymentDays,
             status: 'OPEN',
           },
         })
@@ -309,6 +322,8 @@ export async function POST(request) {
     )
   }
 }
+
+
 
 
 
