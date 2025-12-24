@@ -52,11 +52,10 @@ export async function GET(request) {
       },
     })
 
-    // Produtos com estoque baixo - buscar todos os produtos ativos e verificar estoque
+    // Buscar todos os produtos ativos com estoque
     const allProducts = await prisma.product.findMany({
       where: {
         isActive: true,
-        minStock: { not: null },
       },
       include: {
         stockBalance: true,
@@ -66,14 +65,59 @@ export async function GET(request) {
       },
     })
 
-    const lowStockProducts = allProducts
-      .filter((p) => {
-        if (!p.minStock) return false
-        const currentStock = p.stockBalance?.quantity.toNumber() || 0
-        const minStock = p.minStock.toNumber()
-        return currentStock <= minStock
-      })
-      .slice(0, 10)
+    // Buscar movimentações de estoque para calcular entradas e saídas
+    const productIds = allProducts.map((p) => p.id)
+    const stockMovements = await prisma.stockMovement.findMany({
+      where: {
+        productId: { in: productIds },
+      },
+      select: {
+        productId: true,
+        type: true,
+        quantity: true,
+      },
+    })
+
+    // Agrupar movimentações por produto
+    const movementsByProduct = {}
+    stockMovements.forEach((movement) => {
+      if (!movementsByProduct[movement.productId]) {
+        movementsByProduct[movement.productId] = {
+          entries: new Decimal(0),
+          exits: new Decimal(0),
+        }
+      }
+      if (movement.type === 'IN') {
+        movementsByProduct[movement.productId].entries = movementsByProduct[movement.productId].entries.plus(movement.quantity)
+      } else if (movement.type === 'OUT') {
+        movementsByProduct[movement.productId].exits = movementsByProduct[movement.productId].exits.plus(movement.quantity)
+      }
+    })
+
+    // Mapear produtos com informações de estoque e indicador de estoque baixo
+    const productsWithStock = allProducts.map((p) => {
+      const currentStock = p.stockBalance?.quantity.toNumber() || 0
+      const minStock = p.minStock?.toNumber() || null
+      const isLowStock = minStock !== null && currentStock <= minStock
+      const movements = movementsByProduct[p.id] || { entries: new Decimal(0), exits: new Decimal(0) }
+      const totalEntries = movements.entries.toNumber()
+      const totalExits = movements.exits.toNumber()
+
+      return {
+        id: p.id,
+        sku: p.sku,
+        name: p.name,
+        currentStock,
+        minStock,
+        unit: p.unit,
+        isLowStock,
+        totalEntries,
+        totalExits,
+      }
+    })
+
+    // Contar produtos com estoque baixo
+    const lowStockCount = productsWithStock.filter((p) => p.isLowStock).length
 
     // Vendas do período
     const salesInPeriod = await prisma.salesOrder.aggregate({
@@ -153,15 +197,8 @@ export async function GET(request) {
         cashBalance: cashBalance.toNumber(),
         accountsPayable: totalAccountsPayable._sum.amount?.toNumber() || 0,
         accountsReceivable: totalAccountsReceivable._sum.amount?.toNumber() || 0,
-        lowStockCount: lowStockProducts.length,
-        lowStockProducts: lowStockProducts.map((p) => ({
-          id: p.id,
-          sku: p.sku,
-          name: p.name, // Nome completo do produto
-          currentStock: p.stockBalance?.quantity.toNumber() || 0,
-          minStock: p.minStock?.toNumber() || 0,
-          unit: p.unit,
-        })),
+        lowStockCount,
+        productsWithStock: productsWithStock.slice(0, 20), // Limitar a 20 produtos para não sobrecarregar
         sales: {
           total: salesInPeriod._sum.total?.toNumber() || 0,
           count: salesInPeriod._count.id || 0,

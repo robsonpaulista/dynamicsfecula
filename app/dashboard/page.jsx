@@ -198,37 +198,82 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {dashboardData?.lowStockProducts?.length > 0 && (
-          <Card className="mt-4 md:mt-6 gradient-card border-orange-100/50 shadow-glow">
+        {dashboardData?.productsWithStock && dashboardData.productsWithStock.length > 0 && (
+          <Card className="mt-4 md:mt-6 gradient-card border-[#00B299]/20 shadow-glow">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-lg bg-[#FF8C00] flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-white" />
+                <div className="w-10 h-10 rounded-lg bg-[#00B299] flex items-center justify-center">
+                  <Package className="h-5 w-5 text-white" />
                 </div>
-                Produtos com Estoque Baixo
+                Estoque dos Produtos
+                {dashboardData.lowStockCount > 0 && (
+                  <span className="ml-2 px-2 py-1 bg-orange-500 text-white text-xs font-semibold rounded-full">
+                    {dashboardData.lowStockCount} com estoque baixo
+                  </span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {dashboardData.lowStockProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="flex justify-between items-center p-3 md:p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-xl border border-orange-200/50 hover:shadow-md transition-all"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 break-words">{product.name}</p>
-                      <p className="text-xs md:text-sm text-gray-600">SKU: {product.sku}</p>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {dashboardData.productsWithStock.map((product) => {
+                  const isLowStock = product.isLowStock
+                  return (
+                    <div
+                      key={product.id}
+                      className={`flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-3 md:p-4 rounded-xl border hover:shadow-md transition-all ${
+                        isLowStock
+                          ? 'bg-gradient-to-r from-orange-50 to-red-50 border-orange-200/50'
+                          : 'bg-gray-50 border-gray-200'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0 flex items-center gap-3">
+                        {isLowStock && (
+                          <div className="flex-shrink-0">
+                            <AlertTriangle className="h-5 w-5 text-orange-500" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-gray-900 break-words">{product.name}</p>
+                            {isLowStock && (
+                              <span className="px-2 py-0.5 bg-orange-500 text-white text-xs font-semibold rounded whitespace-nowrap">
+                                Estoque Baixo
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs md:text-sm text-gray-600">SKU: {product.sku}</p>
+                        </div>
+                      </div>
+                      <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm">
+                          <div className="text-green-600">
+                            <span className="font-medium">Entradas:</span>{' '}
+                            <span className="font-bold">{product.totalEntries || 0} {product.unit || ''}</span>
+                          </div>
+                          <div className="text-red-600">
+                            <span className="font-medium">Saídas:</span>{' '}
+                            <span className="font-bold">{product.totalExits || 0} {product.unit || ''}</span>
+                          </div>
+                        </div>
+                        <div className="text-right sm:text-left border-t sm:border-t-0 sm:border-l pt-2 sm:pt-0 sm:pl-4 border-gray-300">
+                          <p className={`text-sm md:text-base font-semibold ${isLowStock ? 'text-orange-600' : 'text-gray-700'}`}>
+                            Estoque: <span className={`font-bold ${isLowStock ? 'text-[#FF8C00]' : 'text-[#00B299]'}`}>
+                              {product.currentStock} {product.unit || ''}
+                            </span>
+                          </p>
+                          {product.minStock !== null && (
+                            <p className="text-xs text-gray-500">
+                              Mínimo: {product.minStock} {product.unit || ''}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-1">
+                            {product.totalEntries || 0} - {product.totalExits || 0} = {product.currentStock}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-right ml-4 flex-shrink-0">
-                      <p className="text-sm md:text-base">
-                        Estoque: <span className="font-bold text-[#FF8C00]">{product.currentStock} {product.unit || ''}</span>
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Mínimo: {product.minStock} {product.unit || ''}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
