@@ -52,22 +52,26 @@ export async function GET(request) {
       },
     })
 
-    // Produtos com estoque baixo
+    // Produtos com estoque baixo - buscar todos os produtos ativos e verificar estoque
     const allProducts = await prisma.product.findMany({
       where: {
         isActive: true,
         minStock: { not: null },
-        stockBalance: { isNot: null },
       },
       include: {
         stockBalance: true,
+      },
+      orderBy: {
+        name: 'asc',
       },
     })
 
     const lowStockProducts = allProducts
       .filter((p) => {
-        if (!p.stockBalance || !p.minStock) return false
-        return p.stockBalance.quantity.toNumber() <= p.minStock.toNumber()
+        if (!p.minStock) return false
+        const currentStock = p.stockBalance?.quantity.toNumber() || 0
+        const minStock = p.minStock.toNumber()
+        return currentStock <= minStock
       })
       .slice(0, 10)
 
@@ -109,6 +113,40 @@ export async function GET(request) {
       },
     })
 
+    // Despesas pagas no período
+    const expensesPaid = await prisma.accountsPayable.aggregate({
+      where: {
+        status: 'PAID',
+        paidAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      _sum: {
+        amount: true,
+      },
+      _count: {
+        id: true,
+      },
+    })
+
+    // Receitas recebidas no período
+    const incomeReceived = await prisma.accountsReceivable.aggregate({
+      where: {
+        status: 'RECEIVED',
+        receivedAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      _sum: {
+        amount: true,
+      },
+      _count: {
+        id: true,
+      },
+    })
+
     return NextResponse.json({
       success: true,
       data: {
@@ -119,9 +157,10 @@ export async function GET(request) {
         lowStockProducts: lowStockProducts.map((p) => ({
           id: p.id,
           sku: p.sku,
-          name: p.name,
+          name: p.name, // Nome completo do produto
           currentStock: p.stockBalance?.quantity.toNumber() || 0,
           minStock: p.minStock?.toNumber() || 0,
+          unit: p.unit,
         })),
         sales: {
           total: salesInPeriod._sum.total?.toNumber() || 0,
@@ -130,6 +169,14 @@ export async function GET(request) {
         purchases: {
           total: purchasesInPeriod._sum.total?.toNumber() || 0,
           count: purchasesInPeriod._count.id || 0,
+        },
+        expenses: {
+          paid: expensesPaid._sum.amount?.toNumber() || 0,
+          count: expensesPaid._count.id || 0,
+        },
+        income: {
+          received: incomeReceived._sum.amount?.toNumber() || 0,
+          count: incomeReceived._count.id || 0,
         },
       },
     })
@@ -140,6 +187,8 @@ export async function GET(request) {
     )
   }
 }
+
+
 
 
 

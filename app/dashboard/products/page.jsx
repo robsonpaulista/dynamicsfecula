@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import api from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { formatCurrency } from '@/lib/utils'
-import { Plus, Search, Package } from 'lucide-react'
+import { Plus, Search, Package, Edit } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ProductsPage() {
@@ -14,11 +14,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    loadProducts()
-  }, [search])
-
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
       const response = await api.get('/products', {
         params: { search, limit: 50 },
@@ -29,7 +25,11 @@ export default function ProductsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [search])
+
+  useEffect(() => {
+    loadProducts()
+  }, [loadProducts])
 
   return (
     <div className="p-4 md:p-6 lg:p-8">

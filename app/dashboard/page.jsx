@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
@@ -30,7 +30,7 @@ export default function DashboardPage() {
     if (user) {
       loadDashboard()
     }
-  }, [user, authLoading])
+  }, [user, authLoading, router])
 
   const loadDashboard = async () => {
     try {
@@ -158,6 +158,44 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
           </Card>
+
+          <Card className="gradient-card border-green-100/50 hover:shadow-glow transition-all">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
+                  <TrendingUp className="h-5 w-5 text-white" />
+                </div>
+                Receitas Recebidas
+              </CardTitle>
+              <CardDescription className="text-base">
+                <span className="font-bold text-green-600">
+                  {formatCurrency(dashboardData?.income?.received || 0)}
+                </span>
+                <span className="text-gray-500 ml-2">
+                  • {dashboardData?.income?.count || 0} recebimentos
+                </span>
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <Card className="gradient-card border-red-100/50 hover:shadow-glow transition-all">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-lg bg-red-500 flex items-center justify-center">
+                  <TrendingDown className="h-5 w-5 text-white" />
+                </div>
+                Despesas Pagas
+              </CardTitle>
+              <CardDescription className="text-base">
+                <span className="font-bold text-red-600">
+                  {formatCurrency(dashboardData?.expenses?.paid || 0)}
+                </span>
+                <span className="text-gray-500 ml-2">
+                  • {dashboardData?.expenses?.count || 0} pagamentos
+                </span>
+              </CardDescription>
+            </CardHeader>
+          </Card>
         </div>
 
         {dashboardData?.lowStockProducts?.length > 0 && (
@@ -177,16 +215,16 @@ export default function DashboardPage() {
                     key={product.id}
                     className="flex justify-between items-center p-3 md:p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-xl border border-orange-200/50 hover:shadow-md transition-all"
                   >
-                    <div>
-                      <p className="font-semibold text-gray-900">{product.name}</p>
-                      <p className="text-xs md:text-sm text-gray-600">{product.sku}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900 break-words">{product.name}</p>
+                      <p className="text-xs md:text-sm text-gray-600">SKU: {product.sku}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right ml-4 flex-shrink-0">
                       <p className="text-sm md:text-base">
-                        Estoque: <span className="font-bold text-[#FF8C00]">{product.currentStock}</span>
+                        Estoque: <span className="font-bold text-[#FF8C00]">{product.currentStock} {product.unit || ''}</span>
                       </p>
                       <p className="text-xs text-gray-500">
-                        Mínimo: {product.minStock}
+                        Mínimo: {product.minStock} {product.unit || ''}
                       </p>
                     </div>
                   </div>
