@@ -35,6 +35,31 @@ export async function GET(request, { params }) {
         accountsReceivable: {
           orderBy: { dueDate: 'asc' },
         },
+        returns: {
+          include: {
+            items: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    sku: true,
+                    unit: true,
+                  },
+                },
+              },
+            },
+            customerCredit: {
+              select: {
+                id: true,
+                amount: true,
+                usedAmount: true,
+                status: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
         createdBy: {
           select: {
             id: true,
@@ -66,6 +91,21 @@ export async function GET(request, { params }) {
         ...ar,
         amount: Number(ar.amount),
       })),
+      returns: salesOrder.returns.map(ret => ({
+        ...ret,
+        total: Number(ret.total),
+        items: ret.items.map(item => ({
+          ...item,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+          total: Number(item.total),
+        })),
+        customerCredit: ret.customerCredit ? {
+          ...ret.customerCredit,
+          amount: Number(ret.customerCredit.amount),
+          usedAmount: Number(ret.customerCredit.usedAmount),
+        } : null,
+      })),
     }
 
     return NextResponse.json({
@@ -86,6 +126,8 @@ export async function GET(request, { params }) {
     )
   }
 }
+
+
 
 
 

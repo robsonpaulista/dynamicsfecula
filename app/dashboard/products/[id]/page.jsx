@@ -1,14 +1,30 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import api from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { formatCurrency } from '@/lib/utils'
-import { ArrowLeft, Package, TrendingUp, TrendingDown, Calendar, User, Loader2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { formatCurrency, formatDate } from '@/lib/utils'
+import { ArrowLeft, Save, Edit, Package, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
+
+const productSchema = z.object({
+  sku: z.string().min(1, 'SKU é obrigatório'),
+  name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres'),
+  type: z.enum(['MP', 'PA', 'SERVICO']),
+  unit: z.string().min(1, 'Unidade é obrigatória'),
+  minStock: z.number().min(0).optional().nullable(),
+  costPrice: z.number().min(0).optional().nullable(),
+  salePrice: z.number().min(0).optional().nullable(),
+  isActive: z.boolean(),
+})
 
 export default function ProductDetailPage() {
   const params = useParams()
@@ -16,15 +32,35 @@ export default function ProductDetailPage() {
   const { toast } = useToast()
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    loadProduct()
-  }, [params.id])
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm({
+    resolver: zodResolver(productSchema),
+  })
 
-  const loadProduct = async () => {
+  const loadProduct = useCallback(async () => {
     try {
       const response = await api.get(`/products/${params.id}`)
-      setProduct(response.data.data)
+      const productData = response.data.data
+      setProduct(productData)
+      
+      // Preencher formulário com dados do produto
+      reset({
+        sku: productData.sku,
+        name: productData.name,
+        type: productData.type,
+        unit: productData.unit,
+        minStock: productData.minStock ?? null,
+        costPrice: productData.costPrice ?? null,
+        salePrice: productData.salePrice ?? null,
+        isActive: productData.isActive ?? true,
+      })
     } catch (error) {
       toast({
         title: 'Erro',
@@ -35,35 +71,40 @@ export default function ProductDetailPage() {
     } finally {
       setLoading(false)
     }
+  }, [params.id, router, toast, reset])
+
+  useEffect(() => {
+    loadProduct()
+  }, [loadProduct])
+
+  const onSubmit = async (data) => {
+    setSaving(true)
+    try {
+      await api.put(`/products/${params.id}`, data)
+      toast({
+        title: 'Sucesso!',
+        description: 'Produto atualizado com sucesso',
+      })
+      setEditing(false)
+      loadProduct()
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error.response?.data?.error?.message || 'Erro ao atualizar produto',
+        variant: 'destructive',
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const getTypeLabel = (type) => {
-    const types = {
-      MP: 'Matéria-Prima',
-      PA: 'Produto Acabado',
+    const labels = {
+      MP: 'Matéria-prima',
+      PA: 'Produto acabado',
       SERVICO: 'Serviço',
     }
-    return types[type] || type
-  }
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '-'
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
-
-  const getMovementTypeLabel = (type) => {
-    const types = {
-      IN: 'Entrada',
-      OUT: 'Saída',
-      ADJUST: 'Ajuste',
-    }
-    return types[type] || type
+    return labels[type] || type
   }
 
   if (loading) {
@@ -85,209 +126,309 @@ export default function ProductDetailPage() {
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-6">
+        <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <Button variant="ghost" asChild className="hover:bg-[#00B299]/10">
             <Link href="/dashboard/products">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Link>
           </Button>
+          {!editing && (
+            <Button
+              variant="outline"
+              onClick={() => setEditing(true)}
+              className="ml-auto hover:bg-[#00B299]/10 hover:border-[#00B299]"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Editar
+            </Button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Informações Principais */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card className="gradient-card border-[#00B299]/20 shadow-glow-lg">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-                      {product.name}
-                    </CardTitle>
-                    <p className="text-gray-600">SKU: {product.sku}</p>
+        {editing ? (
+          <Card className="gradient-card border-[#00B299]/20 shadow-glow-lg">
+            <CardHeader>
+              <CardTitle className="text-2xl text-[#00B299]">
+                Editar Produto
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sku">SKU *</Label>
+                    <Input
+                      id="sku"
+                      {...register('sku')}
+                      placeholder="SKU-001"
+                    />
+                    {errors.sku && (
+                      <p className="text-sm text-red-600">{errors.sku.message}</p>
+                    )}
                   </div>
-                  <div className="w-16 h-16 rounded-xl bg-[#00B299] flex items-center justify-center shadow-md">
-                    <Package className="h-8 w-8 text-white" />
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2 p-4 bg-[#00B299]/5 rounded-xl">
-                    <p className="text-sm text-gray-600">Tipo</p>
-                    <p className="text-lg font-semibold text-[#00B299]">{getTypeLabel(product.type)}</p>
-                  </div>
-                  <div className="space-y-2 p-4 bg-[#00B299]/5 rounded-xl">
-                    <p className="text-sm text-gray-600">Unidade</p>
-                    <p className="text-lg font-semibold text-[#00B299]">{product.unit}</p>
-                  </div>
-                  {product.minStock !== null && (
-                    <div className="space-y-2 p-4 bg-[#FF8C00]/5 rounded-xl">
-                      <p className="text-sm text-gray-600">Estoque Mínimo</p>
-                      <p className="text-lg font-semibold text-[#FF8C00]">
-                        {Number(product.minStock)} {product.unit}
-                      </p>
-                    </div>
-                  )}
-                  <div className="space-y-2 p-4 bg-[#00B299]/5 rounded-xl">
-                    <p className="text-sm text-gray-600">Status</p>
-                    <p className={`text-lg font-semibold ${product.isActive ? 'text-[#00B299]' : 'text-red-700'}`}>
-                      {product.isActive ? 'Ativo' : 'Inativo'}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* Preços */}
-            {(product.costPrice !== null || product.salePrice !== null) && (
-              <Card className="gradient-card border-[#00B299]/20">
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Tipo *</Label>
+                    <select
+                      id="type"
+                      {...register('type')}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="MP">Matéria-prima</option>
+                      <option value="PA">Produto acabado</option>
+                      <option value="SERVICO">Serviço</option>
+                    </select>
+                    {errors.type && (
+                      <p className="text-sm text-red-600">{errors.type.message}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nome *</Label>
+                  <Input
+                    id="name"
+                    {...register('name')}
+                    placeholder="Nome do produto"
+                  />
+                  {errors.name && (
+                    <p className="text-sm text-red-600">{errors.name.message}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="unit">Unidade *</Label>
+                    <Input
+                      id="unit"
+                      {...register('unit')}
+                      placeholder="kg, un, cx..."
+                    />
+                    {errors.unit && (
+                      <p className="text-sm text-red-600">{errors.unit.message}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="minStock">Estoque Mínimo</Label>
+                    <Input
+                      id="minStock"
+                      type="number"
+                      step="0.01"
+                      {...register('minStock', { valueAsNumber: true })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="costPrice">Preço de Custo</Label>
+                    <Input
+                      id="costPrice"
+                      type="number"
+                      step="0.01"
+                      {...register('costPrice', { valueAsNumber: true })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="salePrice">Preço de Venda</Label>
+                  <Input
+                    id="salePrice"
+                    type="number"
+                    step="0.01"
+                    {...register('salePrice', { valueAsNumber: true })}
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    {...register('isActive')}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="isActive" className="text-sm font-normal">
+                    Produto ativo
+                  </Label>
+                </div>
+
+                <div className="flex justify-end gap-4 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditing(false)
+                      loadProduct()
+                    }}
+                    className="hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    className="gradient-primary hover:shadow-glow-lg transition-all"
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Salvar
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="lg:col-span-2 space-y-4 md:space-y-6">
+              <Card className="gradient-card border-[#00B299]/20 shadow-glow-lg">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-[#00B299] flex items-center justify-center">
-                      <TrendingUp className="h-4 w-4 text-white" />
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+                        {product.name}
+                      </CardTitle>
+                      <p className="text-gray-600">SKU: {product.sku}</p>
                     </div>
-                    Preços
-                  </CardTitle>
+                    <div className="w-16 h-16 rounded-xl bg-[#00B299] flex items-center justify-center shadow-md">
+                      <Package className="h-8 w-8 text-white" />
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2 p-4 bg-[#00B299]/5 rounded-xl">
+                      <p className="text-sm text-gray-600">Tipo</p>
+                      <p className="text-base font-semibold text-[#00B299]">
+                        {getTypeLabel(product.type)}
+                      </p>
+                    </div>
+                    <div className="space-y-2 p-4 bg-[#00B299]/5 rounded-xl">
+                      <p className="text-sm text-gray-600">Unidade</p>
+                      <p className="text-base font-semibold text-[#00B299]">
+                        {product.unit}
+                      </p>
+                    </div>
+                    {product.minStock !== null && (
+                      <div className="space-y-2 p-4 bg-[#00B299]/5 rounded-xl">
+                        <p className="text-sm text-gray-600">Estoque Mínimo</p>
+                        <p className="text-base font-semibold text-[#00B299]">
+                          {product.minStock} {product.unit}
+                        </p>
+                      </div>
+                    )}
                     {product.costPrice !== null && (
-                      <div className="p-4 bg-[#00B299]/5 rounded-xl">
-                        <p className="text-sm text-gray-600 mb-1">Preço de Custo</p>
-                        <p className="text-2xl font-bold text-[#00B299]">
-                          {formatCurrency(Number(product.costPrice))}
+                      <div className="space-y-2 p-4 bg-[#00B299]/5 rounded-xl">
+                        <p className="text-sm text-gray-600">Preço de Custo</p>
+                        <p className="text-base font-semibold text-[#00B299]">
+                          {formatCurrency(product.costPrice)}
                         </p>
                       </div>
                     )}
                     {product.salePrice !== null && (
-                      <div className="p-4 bg-[#00B299]/5 rounded-xl">
-                        <p className="text-sm text-gray-600 mb-1">Preço de Venda</p>
-                        <p className="text-2xl font-bold text-[#00B299]">
-                          {formatCurrency(Number(product.salePrice))}
+                      <div className="space-y-2 p-4 bg-[#00B299]/5 rounded-xl">
+                        <p className="text-sm text-gray-600">Preço de Venda</p>
+                        <p className="text-base font-semibold text-[#00B299]">
+                          {formatCurrency(product.salePrice)}
                         </p>
                       </div>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Movimentações de Estoque */}
-            {product.stockMovements && product.stockMovements.length > 0 && (
-              <Card className="gradient-card border-green-100/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
-                      <TrendingDown className="h-4 w-4 text-white" />
-                    </div>
-                    Últimas Movimentações
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {product.stockMovements.map((movement) => (
-                      <div
-                        key={movement.id}
-                        className="flex justify-between items-center p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-100/50"
-                      >
-                        <div className="flex-1">
-                          <p className="font-semibold text-gray-900">{getMovementTypeLabel(movement.type)}</p>
-                          <p className="text-xs text-gray-600 flex items-center gap-2 mt-1 flex-wrap">
-                            <Calendar className="h-3 w-3" />
-                            {formatDate(movement.createdAt)}
-                            {movement.reference?.supplier && (
-                              <>
-                                <span className="mx-1">•</span>
-                                <span className="text-blue-600 font-medium">Fornecedor: {movement.reference.supplier.name}</span>
-                              </>
-                            )}
-                            {movement.reference?.customer && (
-                              <>
-                                <span className="mx-1">•</span>
-                                <span className="text-purple-600 font-medium">Cliente: {movement.reference.customer.name}</span>
-                              </>
-                            )}
-                            {movement.createdBy && (
-                              <>
-                                <span className="mx-1">•</span>
-                                <User className="h-3 w-3" />
-                                {movement.createdBy.name}
-                              </>
-                            )}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`font-bold text-lg ${
-                            movement.type === 'IN' ? 'text-green-600' : movement.type === 'OUT' ? 'text-red-600' : 'text-orange-600'
-                          }`}>
-                            {movement.type === 'IN' ? '+' : movement.type === 'OUT' ? '-' : '±'}
-                            {Number(movement.quantity)} {product.unit}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Sidebar - Estoque e Informações */}
-          <div className="space-y-6">
-            <Card className="gradient-card border-green-100/50 shadow-glow">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
-                    <Package className="h-5 w-5 text-white" />
-                  </div>
-                  Estoque Atual
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {product.stockBalance ? (
-                  <div className="text-center">
-                    <p className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
-                      {Number(product.stockBalance.quantity)}
-                    </p>
-                    <p className="text-gray-600 font-medium">{product.unit}</p>
-                    {product.minStock !== null && Number(product.stockBalance.quantity) < Number(product.minStock) && (
-                      <p className="text-sm text-orange-600 font-semibold mt-2">
-                        ⚠ Estoque abaixo do mínimo
+                    <div className="space-y-2 p-4 bg-[#00B299]/5 rounded-xl">
+                      <p className="text-sm text-gray-600">Status</p>
+                      <p className="text-base font-semibold text-[#00B299]">
+                        {product.isActive ? 'Ativo' : 'Inativo'}
                       </p>
-                    )}
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-center text-gray-600">Sem estoque cadastrado</p>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            <Card className="gradient-card border-gray-100/50">
-              <CardHeader>
-                <CardTitle className="text-lg">Informações</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <p className="text-xs text-gray-600">Criado em</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {formatDate(product.createdAt)}
-                  </p>
-                </div>
-                {product.updatedAt && (
+              {product.stockBalance && (
+                <Card className="gradient-card border-purple-100/50">
+                  <CardHeader>
+                    <CardTitle>Estoque Atual</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center p-6">
+                      <p className="text-4xl font-bold text-[#00B299]">
+                        {Number(product.stockBalance.quantity)} {product.unit}
+                      </p>
+                      {product.minStock !== null && (
+                        <p className="text-sm text-gray-600 mt-2">
+                          Estoque mínimo: {product.minStock} {product.unit}
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {product.stockMovements && product.stockMovements.length > 0 && (
+                <Card className="gradient-card border-gray-100/50">
+                  <CardHeader>
+                    <CardTitle>Últimas Movimentações</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {product.stockMovements.slice(0, 10).map((movement) => (
+                        <div
+                          key={movement.id}
+                          className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
+                        >
+                          <div>
+                            <p className="text-sm font-medium">
+                              {movement.type === 'IN' ? 'Entrada' : movement.type === 'OUT' ? 'Saída' : 'Ajuste'}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {formatDate(movement.createdAt)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-sm font-bold ${movement.type === 'IN' ? 'text-green-600' : movement.type === 'OUT' ? 'text-red-600' : 'text-blue-600'}`}>
+                              {movement.type === 'IN' ? '+' : '-'}{Number(movement.quantity)} {product.unit}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            <div className="space-y-4 md:space-y-6">
+              <Card className="gradient-card border-gray-100/50">
+                <CardHeader>
+                  <CardTitle className="text-base sm:text-lg">Informações</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
                   <div>
-                    <p className="text-xs text-gray-600">Atualizado em</p>
+                    <p className="text-xs text-gray-600">Criado em</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {formatDate(product.updatedAt)}
+                      {formatDate(product.createdAt)}
                     </p>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  {product.updatedAt && (
+                    <div>
+                      <p className="text-xs text-gray-600">Atualizado em</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatDate(product.updatedAt)}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
 }
-

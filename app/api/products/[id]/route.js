@@ -1,8 +1,20 @@
 import { NextResponse } from 'next/server'
+import { Decimal } from '@prisma/client/runtime/library'
 import { prisma } from '@/lib/prisma'
 import { authenticate, authorize } from '@/middleware/auth'
-import { NotFoundError } from '@/utils/errors'
-import { serializeProduct } from '@/lib/serialize'
+import { NotFoundError, BadRequestError } from '@/utils/errors'
+import { z } from 'zod'
+
+const updateProductSchema = z.object({
+  sku: z.string().min(1, 'SKU é obrigatório').optional(),
+  name: z.string().min(2, 'Nome deve ter no mínimo 2 caracteres').optional(),
+  type: z.enum(['MP', 'PA', 'SERVICO']).optional(),
+  unit: z.string().min(1, 'Unidade é obrigatória').optional(),
+  minStock: z.number().min(0).optional().nullable(),
+  costPrice: z.number().min(0).optional().nullable(),
+  salePrice: z.number().min(0).optional().nullable(),
+  isActive: z.boolean().optional(),
+})
 
 export async function GET(request, { params }) {
   try {
@@ -117,6 +129,107 @@ export async function GET(request, { params }) {
     return NextResponse.json(
       { success: false, error: { message: error.message, code: 'ERROR' } },
       { status: error.statusCode || 500 }
+    )
+  }
+}
+
+export async function PUT(request, { params }) {
+  try {
+    const user = authenticate(request)
+    authorize(user, 'ADMIN', 'ESTOQUE', 'COMPRAS')
+
+    const body = await request.json()
+    const data = updateProductSchema.parse(body)
+
+    // Verificar se o produto existe
+    const existingProduct = await prisma.product.findUnique({
+      where: { id: params.id },
+    })
+
+    if (!existingProduct) {
+      return NextResponse.json(
+        { success: false, error: { message: 'Produto não encontrado', code: 'NOT_FOUND' } },
+        { status: 404 }
+      )
+    }
+
+    // Se o SKU está sendo alterado, verificar se já existe
+    if (data.sku && data.sku !== existingProduct.sku) {
+      const skuExists = await prisma.product.findUnique({
+        where: { sku: data.sku },
+      })
+
+      if (skuExists) {
+        return NextResponse.json(
+          { success: false, error: { message: 'SKU já cadastrado', code: 'BAD_REQUEST' } },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Preparar dados de atualização
+    const updateData = {}
+    if (data.sku !== undefined) updateData.sku = data.sku
+    if (data.name !== undefined) updateData.name = data.name
+    if (data.type !== undefined) updateData.type = data.type
+    if (data.unit !== undefined) updateData.unit = data.unit
+    if (data.isActive !== undefined) updateData.isActive = data.isActive
+
+    // Campos Decimal
+    if (data.minStock !== undefined) {
+      updateData.minStock = data.minStock !== null ? new Decimal(data.minStock) : null
+    }
+    if (data.costPrice !== undefined) {
+      updateData.costPrice = data.costPrice !== null ? new Decimal(data.costPrice) : null
+    }
+    if (data.salePrice !== undefined) {
+      updateData.salePrice = data.salePrice !== null ? new Decimal(data.salePrice) : null
+    }
+
+    // Atualizar produto
+    const updatedProduct = await prisma.product.update({
+      where: { id: params.id },
+      data: updateData,
+      include: {
+        stockBalance: true,
+      },
+    })
+
+    // Serializar valores Decimal
+    const serializedProduct = {
+      ...updatedProduct,
+      minStock: updatedProduct.minStock ? Number(updatedProduct.minStock) : null,
+      costPrice: updatedProduct.costPrice ? Number(updatedProduct.costPrice) : null,
+      salePrice: updatedProduct.salePrice ? Number(updatedProduct.salePrice) : null,
+      stockBalance: updatedProduct.stockBalance ? {
+        ...updatedProduct.stockBalance,
+        quantity: Number(updatedProduct.stockBalance.quantity),
+      } : null,
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: serializedProduct,
+      message: 'Produto atualizado com sucesso',
+    })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: { message: error.errors[0].message, code: 'VALIDATION_ERROR' } },
+        { status: 400 }
+      )
+    }
+
+    if (error instanceof NotFoundError || error instanceof BadRequestError) {
+      return NextResponse.json(
+        { success: false, error: { message: error.message, code: error.code || 'ERROR' } },
+        { status: error.statusCode || 400 }
+      )
+    }
+
+    return NextResponse.json(
+      { success: false, error: { message: error.message, code: 'ERROR' } },
+      { status: 500 }
     )
   }
 }

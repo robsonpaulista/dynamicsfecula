@@ -112,10 +112,15 @@ export default function ProductsPage() {
                         </span>
                       </div>
                     )}
-                    <div className="pt-2 border-t border-gray-200">
-                      <Button variant="outline" className="w-full hover:bg-[#00B299]/10 hover:border-[#00B299] transition-all" asChild>
+                    <div className="pt-2 border-t border-gray-200 flex gap-2">
+                      <Button variant="outline" className="flex-1 hover:bg-[#00B299]/10 hover:border-[#00B299] transition-all" asChild>
                         <Link href={`/dashboard/products/${product.id}`}>
                           Ver Detalhes
+                        </Link>
+                      </Button>
+                      <Button variant="outline" className="hover:bg-[#00B299]/10 hover:border-[#00B299] transition-all" asChild>
+                        <Link href={`/dashboard/products/${product.id}`}>
+                          <Edit className="h-4 w-4" />
                         </Link>
                       </Button>
                     </div>

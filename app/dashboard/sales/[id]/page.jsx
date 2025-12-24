@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ArrowLeft, ShoppingCart, Calendar, User, Package, DollarSign, Loader2, Edit, X, Trash2, CheckCircle, Truck, FileText, Printer } from 'lucide-react'
+import { ArrowLeft, ShoppingCart, Calendar, User, Package, DollarSign, Loader2, Edit, X, Trash2, CheckCircle, Truck, FileText, Printer, RotateCcw, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
 import { saveSalesOrderPDF, printSalesOrder } from '@/lib/pdf'
@@ -24,6 +24,11 @@ export default function SalesDetailPage() {
   const [savingAccount, setSavingAccount] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(null)
   const [deliveringOrder, setDeliveringOrder] = useState(false)
+  const [showReturnModal, setShowReturnModal] = useState(false)
+  const [returnItems, setReturnItems] = useState([])
+  const [returnReason, setReturnReason] = useState('')
+  const [returnRefundType, setReturnRefundType] = useState('CREDIT')
+  const [creatingReturn, setCreatingReturn] = useState(false)
 
   const loadSalesOrder = useCallback(async () => {
     try {
@@ -179,6 +184,143 @@ export default function SalesDetailPage() {
     } finally {
       setDeliveringOrder(false)
     }
+  }
+
+  const openReturnModal = () => {
+    if (!salesOrder) return
+
+    // Calcular quantidades já devolvidas
+    const returnedQuantities = {}
+    if (salesOrder.returns) {
+      salesOrder.returns
+        .filter((ret) => ret.status !== 'CANCELED')
+        .forEach((ret) => {
+          ret.items.forEach((item) => {
+            const key = item.salesItemId
+            if (!returnedQuantities[key]) {
+              returnedQuantities[key] = 0
+            }
+            returnedQuantities[key] += Number(item.quantity)
+          })
+        })
+    }
+
+    // Inicializar itens de devolução com quantidades disponíveis
+    const initialReturnItems = salesOrder.items.map((item) => {
+      const originalQty = Number(item.quantity)
+      const returnedQty = returnedQuantities[item.id] || 0
+      const availableQty = originalQty - returnedQty
+
+      return {
+        salesItemId: item.id,
+        productId: item.productId,
+        productName: item.product?.name || 'Produto',
+        originalQuantity: originalQty,
+        returnedQuantity: returnedQty,
+        availableQuantity: availableQty,
+        returnQuantity: 0,
+        unitPrice: Number(item.unitPrice),
+      }
+    })
+
+    setReturnItems(initialReturnItems)
+    setReturnReason('')
+    setReturnRefundType('CREDIT')
+    setShowReturnModal(true)
+  }
+
+  const closeReturnModal = () => {
+    setShowReturnModal(false)
+    setReturnItems([])
+    setReturnReason('')
+    setReturnRefundType('CREDIT')
+  }
+
+  const updateReturnQuantity = (salesItemId, quantity) => {
+    setReturnItems((prev) =>
+      prev.map((item) => {
+        if (item.salesItemId === salesItemId) {
+          const qty = Math.max(0, Math.min(quantity, item.availableQuantity))
+          return {
+            ...item,
+            returnQuantity: qty,
+          }
+        }
+        return item
+      })
+    )
+  }
+
+  const handleCreateReturn = async () => {
+    if (!returnReason.trim()) {
+      toast({
+        title: 'Erro',
+        description: 'O motivo da devolução é obrigatório',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const itemsToReturn = returnItems.filter((item) => item.returnQuantity > 0)
+    if (itemsToReturn.length === 0) {
+      toast({
+        title: 'Erro',
+        description: 'Selecione pelo menos um item para devolução',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setCreatingReturn(true)
+    try {
+      const response = await api.post(`/sales/${params.id}/returns`, {
+        items: itemsToReturn.map((item) => ({
+          salesItemId: item.salesItemId,
+          quantity: item.returnQuantity,
+        })),
+        reason: returnReason.trim(),
+        refundType: returnRefundType,
+      })
+
+      toast({
+        title: 'Sucesso!',
+        description: response.data.message || 'Devolução criada com sucesso',
+      })
+      closeReturnModal()
+      loadSalesOrder()
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error.response?.data?.error?.message || 'Erro ao criar devolução',
+        variant: 'destructive',
+      })
+    } finally {
+      setCreatingReturn(false)
+    }
+  }
+
+  const getAvailableQuantity = (itemId) => {
+    if (!salesOrder || !salesOrder.returns) return 0
+
+    const returnedQuantities = {}
+    salesOrder.returns
+      .filter((ret) => ret.status !== 'CANCELED')
+      .forEach((ret) => {
+        ret.items.forEach((item) => {
+          const key = item.salesItemId
+          if (!returnedQuantities[key]) {
+            returnedQuantities[key] = 0
+          }
+          returnedQuantities[key] += Number(item.quantity)
+        })
+      })
+
+    const originalItem = salesOrder.items.find((item) => item.id === itemId)
+    if (!originalItem) return 0
+
+    const originalQty = Number(originalItem.quantity)
+    const returnedQty = returnedQuantities[itemId] || 0
+    return originalQty - returnedQty
   }
 
   if (loading) {
@@ -401,6 +543,91 @@ export default function SalesDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Devoluções */}
+            {salesOrder.status === 'DELIVERED' && (
+              <Card className="gradient-card border-orange-100/50">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center">
+                        <RotateCcw className="h-4 w-4 text-white" />
+                      </div>
+                      Devoluções
+                    </CardTitle>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={openReturnModal}
+                      className="hover:bg-orange-500/10 hover:border-orange-500"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Nova Devolução
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {salesOrder.returns && salesOrder.returns.length > 0 ? (
+                    <div className="space-y-3">
+                      {salesOrder.returns.map((ret) => (
+                        <div
+                          key={ret.id}
+                          className="p-4 bg-orange-50 rounded-xl border border-orange-200"
+                        >
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-900">
+                                Devolução #{ret.id.slice(0, 8)}
+                              </p>
+                              <p className="text-xs text-gray-600 mt-1">
+                                {formatDate(ret.returnDate)} • Status: {ret.status === 'PROCESSED' ? 'Processada' : ret.status === 'PENDING' ? 'Pendente' : 'Cancelada'}
+                              </p>
+                              <p className="text-sm text-gray-700 mt-2">
+                                <strong>Motivo:</strong> {ret.reason}
+                              </p>
+                            </div>
+                            <div className="text-left sm:text-right">
+                              <p className="text-lg font-bold text-orange-600">
+                                {formatCurrency(ret.total)}
+                              </p>
+                              <p className="text-xs text-gray-600">
+                                {ret.refundType === 'CREDIT' ? 'Crédito' : 'Abatimento em Conta'}
+                              </p>
+                            </div>
+                          </div>
+                          {ret.items && ret.items.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-orange-200">
+                              <p className="text-xs font-medium text-gray-700 mb-2">Itens devolvidos:</p>
+                              <div className="space-y-1">
+                                {ret.items.map((item) => (
+                                  <div key={item.id} className="text-xs text-gray-600">
+                                    {item.product?.name} - {Number(item.quantity)} {item.product?.unit} × {formatCurrency(Number(item.unitPrice))} = {formatCurrency(Number(item.total))}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {ret.customerCredit && (
+                            <div className="mt-3 pt-3 border-t border-orange-200">
+                              <p className="text-xs font-medium text-gray-700">
+                                Crédito gerado: {formatCurrency(ret.customerCredit.amount)} 
+                                {ret.customerCredit.status === 'ACTIVE' && ' (Ativo)'}
+                                {ret.customerCredit.status === 'USED' && ' (Utilizado)'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6">
+                      <RotateCcw className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600">Nenhuma devolução registrada</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -442,6 +669,128 @@ export default function SalesDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal de Devolução */}
+      {showReturnModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xl">Nova Devolução</CardTitle>
+                <Button variant="ghost" size="icon" onClick={closeReturnModal}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="return-reason">Motivo da Devolução *</Label>
+                <Input
+                  id="return-reason"
+                  type="text"
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  placeholder="Descreva o motivo da devolução"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="return-refund-type">Tipo de Reembolso *</Label>
+                <select
+                  id="return-refund-type"
+                  value={returnRefundType}
+                  onChange={(e) => setReturnRefundType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#00B299]"
+                >
+                  <option value="CREDIT">Crédito para o Cliente</option>
+                  <option value="ACCOUNT_RECEIVABLE">Abater em Contas a Receber</option>
+                </select>
+                <p className="text-xs text-gray-600">
+                  {returnRefundType === 'CREDIT'
+                    ? 'Um crédito será criado para o cliente usar em futuras compras'
+                    : 'O valor será abatido nas contas a receber abertas do pedido. Se já estiverem pagas, será criado um crédito.'}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Itens para Devolução</Label>
+                <div className="space-y-3 max-h-64 overflow-y-auto p-2 border rounded-md">
+                  {returnItems.map((item) => {
+                    if (item.availableQuantity <= 0) return null
+                    return (
+                      <div
+                        key={item.salesItemId}
+                        className="p-3 bg-gray-50 rounded-lg border"
+                      >
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2">
+                          <div className="flex-1">
+                            <p className="font-semibold text-sm">{item.productName}</p>
+                            <p className="text-xs text-gray-600">
+                              Disponível: {item.availableQuantity} {salesOrder.items.find((i) => i.id === item.salesItemId)?.product?.unit || 'un'}
+                            </p>
+                          </div>
+                          <div className="text-sm font-semibold text-gray-700">
+                            {formatCurrency(item.unitPrice)} cada
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`return-qty-${item.salesItemId}`} className="text-xs whitespace-nowrap">
+                            Quantidade:
+                          </Label>
+                          <Input
+                            id={`return-qty-${item.salesItemId}`}
+                            type="number"
+                            min="0"
+                            max={item.availableQuantity}
+                            step="0.01"
+                            value={item.returnQuantity}
+                            onChange={(e) => updateReturnQuantity(item.salesItemId, parseFloat(e.target.value) || 0)}
+                            className="w-24"
+                          />
+                          {item.returnQuantity > 0 && (
+                            <span className="text-sm font-semibold text-orange-600 ml-auto">
+                              Total: {formatCurrency(item.returnQuantity * item.unitPrice)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                {returnItems.every((item) => item.availableQuantity <= 0) && (
+                  <div className="text-center py-4 text-sm text-gray-500">
+                    <AlertCircle className="h-5 w-5 mx-auto mb-2 text-gray-400" />
+                    Todos os itens já foram devolvidos
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 pt-4 border-t">
+                <Button variant="outline" onClick={closeReturnModal} className="w-full sm:w-auto">
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleCreateReturn}
+                  disabled={creatingReturn || returnItems.every((item) => item.returnQuantity <= 0)}
+                  className="bg-orange-500 hover:bg-orange-600 w-full sm:w-auto"
+                >
+                  {creatingReturn ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Criar Devolução
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Modal de Edição de Conta a Receber */}
       {editingAccountReceivable && (
