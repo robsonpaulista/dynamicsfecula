@@ -85,8 +85,8 @@ export default function FinancePage() {
   const handlePayAccount = async () => {
     if (!selectedAccount) return
 
-    // Validar fontes pagadoras
-    const validSources = paymentSources.filter(ps => ps.investorId && ps.amount)
+    // Validar fontes pagadoras (aceita Caixa ou Investidor)
+    const validSources = paymentSources.filter(ps => ps.amount && (ps.investorId || ps.investorId === 'CAIXA'))
     if (validSources.length === 0) {
       toast({
         title: 'Erro',
@@ -113,7 +113,8 @@ export default function FinancePage() {
       await api.post(`/finance/ap/${selectedAccount.id}/pay`, {
         paidAt: new Date().toISOString(),
         paymentSources: validSources.map(ps => ({
-          investorId: ps.investorId,
+          // Se for 'CAIXA', não enviar investorId (será null no backend)
+          investorId: ps.investorId === 'CAIXA' ? undefined : ps.investorId,
           amount: parseFloat(ps.amount),
         })),
       })
@@ -310,7 +311,7 @@ export default function FinancePage() {
                           <p className="font-semibold">Fontes pagadoras:</p>
                           {ap.paymentSources.map((ps, idx) => (
                             <p key={idx} className="text-gray-500">
-                              {ps.investor?.name || 'N/A'}: {formatCurrency(Number(ps.amount))}
+                              {ps.investor?.name || '💰 Caixa'}: {formatCurrency(Number(ps.amount))}
                             </p>
                           ))}
                         </div>
@@ -422,11 +423,12 @@ export default function FinancePage() {
                         <Label htmlFor={`source-investor-${index}`} className="text-xs">Investidor / Fonte Pagadora *</Label>
                         <select
                           id={`source-investor-${index}`}
-                          value={source.investorId}
+                          value={source.investorId || ''}
                           onChange={(e) => updatePaymentSource(index, 'investorId', e.target.value)}
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                         >
-                          <option value="">Selecione um investidor</option>
+                          <option value="">Selecione uma fonte pagadora</option>
+                          <option value="CAIXA">💰 Caixa</option>
                           {investors.map((investor) => (
                             <option key={investor.id} value={investor.id}>
                               {investor.name}

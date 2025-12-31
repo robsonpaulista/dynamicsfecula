@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { Decimal } from '@prisma/client/runtime/library'
 
 const paymentSourceSchema = z.object({
-  investorId: z.string().min(1, 'Investidor é obrigatório'),
+  investorId: z.string().optional(), // Opcional - se não fornecido, é "Caixa"
   amount: z.number().min(0.01, 'Valor deve ser maior que zero'),
 })
 
@@ -62,26 +62,31 @@ export async function POST(request, { params }) {
         )
       }
 
-      // Validar se todos os investidores existem e estão ativos
-      const investorIds = paymentSources.map(ps => ps.investorId)
-      const investors = await prisma.investor.findMany({
-        where: {
-          id: { in: investorIds },
-          isActive: true,
-        },
-      })
+      // Validar se todos os investidores existem e estão ativos (apenas os que têm investorId)
+      const investorIds = paymentSources
+        .filter(ps => ps.investorId) // Filtrar apenas fontes com investorId
+        .map(ps => ps.investorId)
 
-      if (investors.length !== investorIds.length) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: { 
-              message: 'Um ou mais investidores não foram encontrados ou estão inativos', 
-              code: 'BAD_REQUEST' 
-            } 
+      if (investorIds.length > 0) {
+        const investors = await prisma.investor.findMany({
+          where: {
+            id: { in: investorIds },
+            isActive: true,
           },
-          { status: 400 }
-        )
+        })
+
+        if (investors.length !== investorIds.length) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: { 
+                message: 'Um ou mais investidores não foram encontrados ou estão inativos', 
+                code: 'BAD_REQUEST' 
+              } 
+            },
+            { status: 400 }
+          )
+        }
       }
     }
 
@@ -94,7 +99,7 @@ export async function POST(request, { params }) {
         paymentMethodId: paymentMethodId || null,
         paymentSources: paymentSources && paymentSources.length > 0 ? {
           create: paymentSources.map(source => ({
-            investorId: source.investorId,
+            investorId: source.investorId || null, // null para "Caixa"
             amount: new Decimal(source.amount),
           })),
         } : undefined,
