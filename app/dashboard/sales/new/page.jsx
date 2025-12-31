@@ -63,11 +63,7 @@ export default function NewSalesPage() {
 
   const watchedItems = watch('items')
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [customersRes, productsRes, paymentMethodsRes] = await Promise.all([
         api.get('/customers', { params: { limit: 100, isActive: 'true' } }),
@@ -87,7 +83,11 @@ export default function NewSalesPage() {
     } finally {
       setLoadingData(false)
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const getProductStock = (productId) => {
     const product = products.find(p => p.id === productId)

@@ -292,96 +292,97 @@ export async function POST(request) {
     } else {
       // Criar contas a receber se parcelas foram informadas (venda normal)
       if (data.installments && data.installments.length > 0) {
-      const orderTotal = Number(total)
-      const totalInstallments = data.installments.reduce((sum, inst) => sum + inst.amount, 0)
+        const orderTotal = Number(total)
+        const totalInstallments = data.installments.reduce((sum, inst) => sum + inst.amount, 0)
 
-      // Validar se a soma das parcelas não excede o total do pedido
-      if (totalInstallments > orderTotal + 0.01) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: { 
-              message: `A soma das parcelas (R$ ${totalInstallments.toFixed(2)}) excede o total do pedido (R$ ${orderTotal.toFixed(2)})`, 
-              code: 'BAD_REQUEST' 
-            } 
-          },
-          { status: 400 }
-        )
-      }
+        // Validar se a soma das parcelas não excede o total do pedido
+        if (totalInstallments > orderTotal + 0.01) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              error: { 
+                message: `A soma das parcelas (R$ ${totalInstallments.toFixed(2)}) excede o total do pedido (R$ ${orderTotal.toFixed(2)})`, 
+                code: 'BAD_REQUEST' 
+              } 
+            },
+            { status: 400 }
+          )
+        }
 
-      const baseDescription = `Pedido de venda #${order.id.slice(0, 8)}`
+        const baseDescription = `Pedido de venda #${order.id.slice(0, 8)}`
 
-      for (let i = 0; i < data.installments.length; i++) {
-        const installment = data.installments[i]
-        const installmentNumber = data.installments.length > 1 ? ` - Parcela ${i + 1}/${data.installments.length}` : ''
-        
-        // Validar paymentMethodId se fornecido
-        let paymentMethodId = null
-        if (installment.paymentMethodId && installment.paymentMethodId.trim() !== '') {
-          const paymentMethod = await prisma.paymentMethod.findUnique({
-            where: { id: installment.paymentMethodId },
+        for (let i = 0; i < data.installments.length; i++) {
+          const installment = data.installments[i]
+          const installmentNumber = data.installments.length > 1 ? ` - Parcela ${i + 1}/${data.installments.length}` : ''
+          
+          // Validar paymentMethodId se fornecido
+          let paymentMethodId = null
+          if (installment.paymentMethodId && installment.paymentMethodId.trim() !== '') {
+            const paymentMethod = await prisma.paymentMethod.findUnique({
+              where: { id: installment.paymentMethodId },
+            })
+            if (!paymentMethod) {
+              return NextResponse.json(
+                { 
+                  success: false, 
+                  error: { 
+                    message: `Forma de pagamento não encontrada para a parcela ${i + 1}`, 
+                    code: 'NOT_FOUND' 
+                  } 
+                },
+                { status: 404 }
+              )
+            }
+            paymentMethodId = installment.paymentMethodId
+          }
+
+          // Validar categoryId se fornecido
+          let categoryId = null
+          if (data.categoryId && data.categoryId.trim() !== '') {
+            const category = await prisma.category.findUnique({
+              where: { id: data.categoryId },
+            })
+            if (!category) {
+              return NextResponse.json(
+                { 
+                  success: false, 
+                  error: { 
+                    message: 'Categoria não encontrada', 
+                    code: 'NOT_FOUND' 
+                  } 
+                },
+                { status: 404 }
+              )
+            }
+            categoryId = data.categoryId
+          }
+          
+          // Calcular prazo em dias se dueDate e saleDate estiverem disponíveis
+          let paymentDays = null
+          if (installment.dueDate && data.saleDate) {
+            const saleDate = new Date(data.saleDate)
+            const dueDate = new Date(installment.dueDate)
+            const diffTime = dueDate.getTime() - saleDate.getTime()
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+            if (diffDays > 0) {
+              paymentDays = diffDays
+            }
+          }
+
+          await prisma.accountsReceivable.create({
+            data: {
+              customerId: data.customerId,
+              salesOrderId: order.id,
+              description: installment.description || `${baseDescription}${installmentNumber}`,
+              dueDate: new Date(installment.dueDate),
+              amount: new Decimal(installment.amount),
+              categoryId,
+              paymentMethodId,
+              paymentDays,
+              status: 'OPEN',
+            },
           })
-          if (!paymentMethod) {
-            return NextResponse.json(
-              { 
-                success: false, 
-                error: { 
-                  message: `Forma de pagamento não encontrada para a parcela ${i + 1}`, 
-                  code: 'NOT_FOUND' 
-                } 
-              },
-              { status: 404 }
-            )
-          }
-          paymentMethodId = installment.paymentMethodId
         }
-
-        // Validar categoryId se fornecido
-        let categoryId = null
-        if (data.categoryId && data.categoryId.trim() !== '') {
-          const category = await prisma.category.findUnique({
-            where: { id: data.categoryId },
-          })
-          if (!category) {
-            return NextResponse.json(
-              { 
-                success: false, 
-                error: { 
-                  message: 'Categoria não encontrada', 
-                  code: 'NOT_FOUND' 
-                } 
-              },
-              { status: 404 }
-            )
-          }
-          categoryId = data.categoryId
-        }
-        
-        // Calcular prazo em dias se dueDate e saleDate estiverem disponíveis
-        let paymentDays = null
-        if (installment.dueDate && data.saleDate) {
-          const saleDate = new Date(data.saleDate)
-          const dueDate = new Date(installment.dueDate)
-          const diffTime = dueDate.getTime() - saleDate.getTime()
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-          if (diffDays > 0) {
-            paymentDays = diffDays
-          }
-        }
-
-        await prisma.accountsReceivable.create({
-          data: {
-            customerId: data.customerId,
-            salesOrderId: order.id,
-            description: installment.description || `${baseDescription}${installmentNumber}`,
-            dueDate: new Date(installment.dueDate),
-            amount: new Decimal(installment.amount),
-            categoryId,
-            paymentMethodId,
-            paymentDays,
-            status: 'OPEN',
-          },
-        })
       }
     }
 
