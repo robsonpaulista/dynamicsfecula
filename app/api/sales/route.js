@@ -15,6 +15,7 @@ const installmentSchema = z.object({
 const salesSchema = z.object({
   customerId: z.string().min(1, 'Cliente é obrigatório'),
   saleDate: z.string().or(z.date()),
+  isBonificacao: z.boolean().optional().default(false),
   items: z.array(z.object({
     productId: z.string(),
     quantity: z.number().min(0.01, 'Quantidade deve ser maior que zero'),
@@ -167,6 +168,7 @@ export async function POST(request) {
         customerId: data.customerId,
         saleDate: new Date(data.saleDate || new Date()),
         total,
+        isBonificacao: data.isBonificacao || false,
         status: 'DRAFT',
         createdById: user.id,
         items: {
@@ -183,8 +185,113 @@ export async function POST(request) {
       },
     })
 
-    // Criar contas a receber se parcelas foram informadas
-    if (data.installments && data.installments.length > 0) {
+    // Se for bonificação, criar despesa (AccountsPayable) em vez de contas a receber
+    if (data.isBonificacao) {
+      if (data.installments && data.installments.length > 0) {
+        // Criar uma despesa para cada parcela informada
+        const baseDescription = `Bonificação - Pedido de venda #${order.id.slice(0, 8)}`
+        
+        for (let i = 0; i < data.installments.length; i++) {
+          const installment = data.installments[i]
+          const installmentNumber = data.installments.length > 1 ? ` - Parcela ${i + 1}/${data.installments.length}` : ''
+          
+          // Validar paymentMethodId se fornecido
+          let paymentMethodId = null
+          if (installment.paymentMethodId && installment.paymentMethodId.trim() !== '') {
+            const paymentMethod = await prisma.paymentMethod.findUnique({
+              where: { id: installment.paymentMethodId },
+            })
+            if (!paymentMethod) {
+              return NextResponse.json(
+                { 
+                  success: false, 
+                  error: { 
+                    message: `Forma de pagamento não encontrada para a parcela ${i + 1}`, 
+                    code: 'NOT_FOUND' 
+                  } 
+                },
+                { status: 404 }
+              )
+            }
+            paymentMethodId = installment.paymentMethodId
+          }
+
+          // Validar categoryId se fornecido
+          let categoryId = null
+          if (data.categoryId && data.categoryId.trim() !== '') {
+            const category = await prisma.category.findUnique({
+              where: { id: data.categoryId },
+            })
+            if (!category) {
+              return NextResponse.json(
+                { 
+                  success: false, 
+                  error: { 
+                    message: 'Categoria não encontrada', 
+                    code: 'NOT_FOUND' 
+                  } 
+                },
+                { status: 404 }
+              )
+            }
+            categoryId = data.categoryId
+          }
+
+          await prisma.accountsPayable.create({
+            data: {
+              salesOrderId: order.id,
+              description: installment.description || `${baseDescription}${installmentNumber}`,
+              dueDate: new Date(installment.dueDate),
+              amount: new Decimal(installment.amount),
+              categoryId,
+              paymentMethodId,
+              status: 'OPEN',
+            },
+          })
+        }
+      } else {
+        // Se não houver parcelas, criar uma despesa única com o total do pedido
+        const baseDescription = `Bonificação - Pedido de venda #${order.id.slice(0, 8)}`
+        
+        // Validar categoryId se fornecido
+        let categoryId = null
+        if (data.categoryId && data.categoryId.trim() !== '') {
+          const category = await prisma.category.findUnique({
+            where: { id: data.categoryId },
+          })
+          if (!category) {
+            return NextResponse.json(
+              { 
+                success: false, 
+                error: { 
+                  message: 'Categoria não encontrada', 
+                  code: 'NOT_FOUND' 
+                } 
+              },
+              { status: 404 }
+            )
+          }
+          categoryId = data.categoryId
+        }
+
+        // Data de vencimento padrão: 30 dias a partir da data da venda
+        const defaultDueDate = new Date(data.saleDate || new Date())
+        defaultDueDate.setDate(defaultDueDate.getDate() + 30)
+
+        await prisma.accountsPayable.create({
+          data: {
+            salesOrderId: order.id,
+            description: baseDescription,
+            dueDate: defaultDueDate,
+            amount: total,
+            categoryId,
+            status: 'OPEN',
+          },
+        })
+      }
+    } else {
+      // Criar contas a receber se parcelas foram informadas (venda normal)
+      if (data.installments && data.installments.length > 0) {
       const orderTotal = Number(total)
       const totalInstallments = data.installments.reduce((sum, inst) => sum + inst.amount, 0)
 

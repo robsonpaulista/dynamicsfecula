@@ -190,6 +190,7 @@ model SalesOrder {
   status             SalesOrderStatus     @default(DRAFT)
   saleDate           DateTime             @map("sale_date")
   total              Decimal              @default(0) @db.Decimal(10, 2)
+  isBonificacao      Boolean              @default(false) @map("is_bonificacao")
   createdById        String               @map("created_by")
   createdAt          DateTime             @default(now()) @map("created_at")
   updatedAt          DateTime             @updatedAt @map("updated_at")

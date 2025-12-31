@@ -18,6 +18,7 @@ import { formatCurrency } from '@/lib/utils'
 const salesSchema = z.object({
   customerId: z.string().min(1, 'Cliente é obrigatório'),
   saleDate: z.string().min(1, 'Data é obrigatória'),
+  isBonificacao: z.boolean().optional().default(false),
   items: z.array(z.object({
     productId: z.string().min(1, 'Produto é obrigatório'),
     quantity: z.number().min(0.01, 'Quantidade deve ser maior que zero'),
@@ -48,9 +49,12 @@ export default function NewSalesPage() {
     defaultValues: {
       customerId: '',
       saleDate: new Date().toISOString().split('T')[0],
+      isBonificacao: false,
       items: [{ productId: '', quantity: 1, unitPrice: 0 }],
     },
   })
+
+  const isBonificacao = watch('isBonificacao')
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -189,6 +193,7 @@ export default function NewSalesPage() {
 
       await api.post('/sales', {
         ...data,
+        isBonificacao: data.isBonificacao || false,
         installments: installmentsData,
       })
       toast({
@@ -283,6 +288,25 @@ export default function NewSalesPage() {
                     <p className="text-sm text-red-600">{errors.saleDate.message}</p>
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="isBonificacao"
+                    {...register('isBonificacao')}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <Label htmlFor="isBonificacao" className="text-sm font-normal">
+                    Venda tipo Bonificação (gera despesa em vez de conta a receber)
+                  </Label>
+                </div>
+                {isBonificacao && (
+                  <p className="text-xs text-orange-600 bg-orange-50 p-2 rounded">
+                    ⚠️ Atenção: Vendas tipo Bonificação movimentam estoque, mas geram despesa financeira em vez de conta a receber.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-4">
@@ -403,7 +427,7 @@ export default function NewSalesPage() {
 
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <Label>Contas a Receber *</Label>
+                  <Label>{isBonificacao ? 'Despesas Financeiras *' : 'Contas a Receber *'}</Label>
                   <Button
                     type="button"
                     variant="outline"
@@ -416,7 +440,7 @@ export default function NewSalesPage() {
                 </div>
 
                 {installments.map((installment, index) => (
-                  <Card key={index} className="p-4 bg-white border-green-200">
+                  <Card key={index} className={`p-4 bg-white ${isBonificacao ? 'border-orange-200' : 'border-green-200'}`}>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <Label className="text-sm font-semibold">
