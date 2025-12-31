@@ -86,7 +86,7 @@ export default function FinancePage() {
     if (!selectedAccount) return
 
     // Validar fontes pagadoras (aceita Caixa ou Investidor)
-    const validSources = paymentSources.filter(ps => ps.amount && (ps.investorId || ps.investorId === 'CAIXA'))
+    const validSources = paymentSources.filter(ps => ps.amount && (ps.investorId || ps.investorId === ''))
     if (validSources.length === 0) {
       toast({
         title: 'Erro',
