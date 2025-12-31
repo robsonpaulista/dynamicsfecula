@@ -19,6 +19,11 @@ const customerSchema = z.object({
   document: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
+  addressStreet: z.string().optional(),
+  addressNumber: z.string().optional(),
+  addressNeighborhood: z.string().optional(),
+  addressCity: z.string().optional(),
+  addressState: z.string().optional(),
   isActive: z.boolean().optional(),
 })
 
@@ -51,6 +56,11 @@ export default function EditCustomerPage() {
         document: customer.document || '',
         phone: customer.phone || '',
         email: customer.email || '',
+        addressStreet: customer.addressStreet || '',
+        addressNumber: customer.addressNumber || '',
+        addressNeighborhood: customer.addressNeighborhood || '',
+        addressCity: customer.addressCity || '',
+        addressState: customer.addressState || '',
         isActive: customer.isActive ?? true,
       })
     } catch (error) {
@@ -168,6 +178,65 @@ export default function EditCustomerPage() {
                 )}
               </div>
 
+              <div className="pt-4 border-t">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Endereço</h3>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="addressStreet">Rua</Label>
+                    <Input
+                      id="addressStreet"
+                      {...register('addressStreet')}
+                      placeholder="Nome da rua"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="addressNumber">Número</Label>
+                      <Input
+                        id="addressNumber"
+                        {...register('addressNumber')}
+                        placeholder="123"
+                      />
+                    </div>
+
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="addressNeighborhood">Bairro</Label>
+                      <Input
+                        id="addressNeighborhood"
+                        {...register('addressNeighborhood')}
+                        placeholder="Nome do bairro"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="addressCity">Cidade</Label>
+                      <Input
+                        id="addressCity"
+                        {...register('addressCity')}
+                        placeholder="Nome da cidade"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="addressState">UF</Label>
+                      <Input
+                        id="addressState"
+                        {...register('addressState')}
+                        placeholder="SP"
+                        maxLength={2}
+                        className="uppercase"
+                        onInput={(e) => {
+                          e.target.value = e.target.value.toUpperCase()
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
@@ -205,6 +274,8 @@ export default function EditCustomerPage() {
     </div>
   )
 }
+
+
 
 
 

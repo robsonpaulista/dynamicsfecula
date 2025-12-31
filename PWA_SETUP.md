@@ -162,3 +162,5 @@ Para mais informações sobre PWAs:
 - https://web.dev/progressive-web-apps/
 - https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps
 - https://www.pwabuilder.com/
+
+

@@ -49,6 +49,11 @@ model Customer {
   document           String?
   phone              String?
   email              String?
+  addressStreet      String?              @map("address_street")
+  addressNumber      String?              @map("address_number")
+  addressNeighborhood String?             @map("address_neighborhood")
+  addressCity        String?              @map("address_city")
+  addressState       String?              @map("address_state")
   addressJson        Json?                @map("address_json")
   isActive           Boolean              @default(true) @map("is_active")
   createdAt          DateTime             @default(now()) @map("created_at")
@@ -475,6 +480,8 @@ enum CreditStatus {
   EXPIRED
   CANCELED
 }
+
+
 
 
 

@@ -28,3 +28,5 @@ Esta pasta contém os ícones necessários para o Progressive Web App (PWA).
 
 ## Nota:
 Os ícones devem ter fundo transparente ou usar a cor do tema (#00B299) como fundo.
+
+

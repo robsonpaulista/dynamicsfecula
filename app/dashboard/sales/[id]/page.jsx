@@ -667,6 +667,22 @@ export default function SalesDetailPage() {
                     <p className="text-sm font-medium text-gray-900 break-words">{salesOrder.customer.phone}</p>
                   </div>
                 )}
+                {(salesOrder.customer?.addressStreet || salesOrder.customer?.addressCity) && (
+                  <div>
+                    <p className="text-xs text-gray-600">Endereço do Cliente</p>
+                    <p className="text-sm font-medium text-gray-900 break-words">
+                      {[
+                        salesOrder.customer.addressStreet,
+                        salesOrder.customer.addressNumber && `nº ${salesOrder.customer.addressNumber}`,
+                        salesOrder.customer.addressNeighborhood,
+                        salesOrder.customer.addressCity,
+                        salesOrder.customer.addressState,
+                      ]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -9,6 +9,11 @@ const customerSchema = z.object({
   document: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
+  addressStreet: z.string().optional(),
+  addressNumber: z.string().optional(),
+  addressNeighborhood: z.string().optional(),
+  addressCity: z.string().optional(),
+  addressState: z.string().optional(),
   addressJson: z.any().optional(),
   isActive: z.boolean().optional(),
 })
@@ -59,9 +64,14 @@ export async function PUT(request, { params }) {
       where: { id: params.id },
       data: {
         name: data.name,
-        document: data.document,
-        phone: data.phone,
+        document: data.document || null,
+        phone: data.phone || null,
         email: data.email || null,
+        addressStreet: data.addressStreet || null,
+        addressNumber: data.addressNumber || null,
+        addressNeighborhood: data.addressNeighborhood || null,
+        addressCity: data.addressCity || null,
+        addressState: data.addressState || null,
         addressJson: data.addressJson,
         isActive: data.isActive,
       },
@@ -122,6 +132,8 @@ export async function DELETE(request, { params }) {
     )
   }
 }
+
+
 
 
 

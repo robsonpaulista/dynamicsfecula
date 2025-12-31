@@ -144,3 +144,5 @@ postgresql://postgres.rxojryfxuskrqzmkyxlr:86Dynamics@aws-0-sa-east-1.pooler.sup
 
 
 
+
+

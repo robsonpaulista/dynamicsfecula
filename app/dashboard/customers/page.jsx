@@ -137,6 +137,20 @@ export default function CustomersPage() {
                         <span className="font-medium">Email:</span> {customer.email}
                       </p>
                     )}
+                    {(customer.addressStreet || customer.addressCity) && (
+                      <p className="text-sm text-gray-600 break-words">
+                        <span className="font-medium">Endereço:</span>{' '}
+                        {[
+                          customer.addressStreet,
+                          customer.addressNumber && `nº ${customer.addressNumber}`,
+                          customer.addressNeighborhood,
+                          customer.addressCity,
+                          customer.addressState,
+                        ]
+                          .filter(Boolean)
+                          .join(', ')}
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
                     <Button
@@ -182,6 +196,8 @@ export default function CustomersPage() {
     </div>
   )
 }
+
+
 
 
 

@@ -41,3 +41,5 @@ sizes.forEach(size => {
 console.log('\n✅ Ícones placeholder criados!')
 console.log('📝 Nota: Para produção, converta os SVGs para PNG.')
 console.log('💡 Você pode usar: https://realfavicongenerator.net/ ou https://www.pwabuilder.com/imageGenerator')
+
+
