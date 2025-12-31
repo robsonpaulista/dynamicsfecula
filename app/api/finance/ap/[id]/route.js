@@ -44,6 +44,19 @@ export async function GET(request, { params }) {
             total: true,
           },
         },
+        salesOrder: {
+          select: {
+            id: true,
+            saleDate: true,
+            total: true,
+            customer: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     })
 
@@ -62,6 +75,10 @@ export async function GET(request, { params }) {
         purchaseOrder: account.purchaseOrder ? {
           ...account.purchaseOrder,
           total: Number(account.purchaseOrder.total),
+        } : null,
+        salesOrder: account.salesOrder ? {
+          ...account.salesOrder,
+          total: Number(account.salesOrder.total),
         } : null,
       },
     })
@@ -180,6 +197,19 @@ export async function PUT(request, { params }) {
             total: true,
           },
         },
+        salesOrder: {
+          select: {
+            id: true,
+            saleDate: true,
+            total: true,
+            customer: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     })
 
@@ -191,6 +221,10 @@ export async function PUT(request, { params }) {
         purchaseOrder: updatedAccount.purchaseOrder ? {
           ...updatedAccount.purchaseOrder,
           total: Number(updatedAccount.purchaseOrder.total),
+        } : null,
+        salesOrder: updatedAccount.salesOrder ? {
+          ...updatedAccount.salesOrder,
+          total: Number(updatedAccount.salesOrder.total),
         } : null,
       },
       message: 'Conta a pagar atualizada com sucesso',

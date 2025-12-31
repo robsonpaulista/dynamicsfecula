@@ -267,7 +267,13 @@ export default function FinancePage() {
                     <div className="flex-1 min-w-0 w-full sm:w-auto">
                       <p className="font-semibold text-gray-900 break-words">{ap.description}</p>
                       <p className="text-xs md:text-sm text-gray-600 mt-1 break-words">
-                        {formatDate(ap.dueDate)} • {ap.supplier?.name || '-'}
+                        {formatDate(ap.dueDate)}
+                        {ap.supplier?.name && ` • ${ap.supplier.name}`}
+                        {ap.salesOrder && (
+                          <span className="inline-block ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                            Venda: #{ap.salesOrder.id.slice(0, 8)}
+                          </span>
+                        )}
                       </p>
                     </div>
                     <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">

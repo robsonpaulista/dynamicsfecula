@@ -7,6 +7,7 @@ import { authenticate, authorize } from '@/middleware/auth'
 const createAccountPayableSchema = z.object({
   description: z.string().min(1, 'Descrição é obrigatória'),
   supplierId: z.string().optional(),
+  salesOrderId: z.string().optional(),
   categoryId: z.string().optional(),
   dueDate: z.string().or(z.date()),
   amount: z.number().min(0.01, 'Valor deve ser maior que zero'),
@@ -35,6 +36,19 @@ export async function GET(request) {
             select: {
               id: true,
               name: true,
+            },
+          },
+          salesOrder: {
+            select: {
+              id: true,
+              saleDate: true,
+              total: true,
+              customer: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
           category: {
@@ -70,6 +84,10 @@ export async function GET(request) {
       data: accounts.map(ap => ({
         ...ap,
         amount: Number(ap.amount),
+        salesOrder: ap.salesOrder ? {
+          ...ap.salesOrder,
+          total: Number(ap.salesOrder.total),
+        } : null,
         paymentSources: ap.paymentSources?.map(ps => ({
           ...ps,
           amount: Number(ps.amount),
@@ -148,10 +166,24 @@ export async function POST(request) {
       }
     }
 
+    // Validar venda se fornecida
+    if (data.salesOrderId) {
+      const salesOrder = await prisma.salesOrder.findUnique({
+        where: { id: data.salesOrderId },
+      })
+      if (!salesOrder) {
+        return NextResponse.json(
+          { success: false, error: { message: 'Pedido de venda não encontrado', code: 'NOT_FOUND' } },
+          { status: 404 }
+        )
+      }
+    }
+
     const accountPayable = await prisma.accountsPayable.create({
       data: {
         supplierId: data.supplierId || null,
-        purchaseOrderId: null, // Manual, não vinculado a pedido
+        salesOrderId: data.salesOrderId || null,
+        purchaseOrderId: null, // Manual, não vinculado a pedido de compra
         description: data.description,
         categoryId: data.categoryId || null,
         dueDate: new Date(data.dueDate),
@@ -171,6 +203,19 @@ export async function POST(request) {
             name: true,
           },
         },
+        salesOrder: {
+          select: {
+            id: true,
+            saleDate: true,
+            total: true,
+            customer: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     })
 
@@ -179,6 +224,10 @@ export async function POST(request) {
       data: {
         ...accountPayable,
         amount: Number(accountPayable.amount),
+        salesOrder: accountPayable.salesOrder ? {
+          ...accountPayable.salesOrder,
+          total: Number(accountPayable.salesOrder.total),
+        } : null,
       },
     }, { status: 201 })
   } catch (error) {

@@ -17,6 +17,7 @@ import Link from 'next/link'
 const expenseSchema = z.object({
   description: z.string().min(1, 'Descrição é obrigatória'),
   supplierId: z.string().optional(),
+  salesOrderId: z.string().optional(),
   categoryId: z.string().min(1, 'Categoria é obrigatória'),
   dueDate: z.string().min(1, 'Data de vencimento é obrigatória'),
   amount: z.number().min(0.01, 'Valor deve ser maior que zero'),
@@ -27,6 +28,7 @@ export default function NewExpensePage() {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [suppliers, setSuppliers] = useState([])
+  const [salesOrders, setSalesOrders] = useState([])
   const [categories, setCategories] = useState([])
   const [loadingData, setLoadingData] = useState(true)
 
@@ -47,11 +49,13 @@ export default function NewExpensePage() {
 
   const loadData = async () => {
     try {
-      const [suppliersRes, categoriesRes] = await Promise.all([
+      const [suppliersRes, salesOrdersRes, categoriesRes] = await Promise.all([
         api.get('/suppliers', { params: { isActive: 'true', limit: 100 } }),
+        api.get('/sales', { params: { limit: 100 } }),
         api.get('/categories', { params: { kind: 'EXPENSE', limit: 100 } }),
       ])
       setSuppliers(suppliersRes.data.data || [])
+      setSalesOrders(salesOrdersRes.data.data || [])
       setCategories(categoriesRes.data.data || [])
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
@@ -71,6 +75,7 @@ export default function NewExpensePage() {
       await api.post('/finance/ap', {
         description: data.description,
         supplierId: data.supplierId || null,
+        salesOrderId: data.salesOrderId || null,
         categoryId: data.categoryId,
         dueDate: data.dueDate,
         amount: data.amount,
@@ -170,6 +175,29 @@ export default function NewExpensePage() {
                     <p className="text-sm text-red-600">{errors.categoryId.message}</p>
                   )}
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="salesOrderId">Venda relacionada (opcional)</Label>
+                <select
+                  id="salesOrderId"
+                  {...register('salesOrderId')}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Selecione uma venda</option>
+                  {salesOrders.map((sale) => {
+                    const saleDate = sale.saleDate ? new Date(sale.saleDate).toLocaleDateString('pt-BR') : ''
+                    const customerName = sale.customer?.name || ''
+                    return (
+                      <option key={sale.id} value={sale.id}>
+                        Pedido #{sale.id.slice(0, 8)} - {customerName} - {saleDate}
+                      </option>
+                    )
+                  })}
+                </select>
+                <p className="text-xs text-gray-600">
+                  Relacione esta despesa a uma venda específica, se aplicável
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

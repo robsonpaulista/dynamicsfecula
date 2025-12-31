@@ -175,6 +175,7 @@ model SalesOrder {
   createdAt          DateTime             @default(now()) @map("created_at")
   updatedAt          DateTime             @updatedAt @map("updated_at")
   accountsReceivable AccountsReceivable[]
+  accountsPayable    AccountsPayable[]
   items              SalesItem[]
   returns            SalesReturn[]
   createdBy          User                 @relation("SalesCreatedBy", fields: [createdById], references: [id])
@@ -238,6 +239,7 @@ model AccountsPayable {
   id              String         @id @default(uuid())
   supplierId      String?        @map("supplier_id")
   purchaseOrderId String?        @map("purchase_order_id")
+  salesOrderId    String?        @map("sales_order_id")
   description     String
   categoryId      String?        @map("category_id")
   dueDate         DateTime       @map("due_date")
@@ -250,6 +252,7 @@ model AccountsPayable {
   category        Category?      @relation(fields: [categoryId], references: [id])
   paymentMethod   PaymentMethod? @relation(fields: [paymentMethodId], references: [id])
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  salesOrder      SalesOrder?    @relation(fields: [salesOrderId], references: [id])
   supplier        Supplier?      @relation(fields: [supplierId], references: [id])
   paymentSources  PaymentSource[]
 
