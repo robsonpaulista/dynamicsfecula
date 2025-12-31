@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ArrowLeft, Save, Edit, Package, Loader2 } from 'lucide-react'
+import { ArrowLeft, Save, Edit, Package, Loader2, AlertTriangle, ClipboardCheck, X, Camera } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
 
@@ -26,6 +26,17 @@ const productSchema = z.object({
   isActive: z.boolean(),
 })
 
+const adjustmentSchema = z.object({
+  type: z.enum(['AVARIA', 'INVENTARIO']),
+  quantity: z.number().refine((val) => val !== 0, {
+    message: 'Quantidade deve ser diferente de zero',
+  }),
+  reason: z.string().min(1, 'Motivo é obrigatório'),
+}).refine((data) => {
+  // Validação de foto será feita no submit
+  return true
+})
+
 export default function ProductDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -34,6 +45,11 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
+  const [adjustments, setAdjustments] = useState([])
+  const [creatingAdjustment, setCreatingAdjustment] = useState(false)
+  const [adjustmentPhoto, setAdjustmentPhoto] = useState(null)
+  const fileInputRef = useRef(null)
 
   const {
     register,
@@ -43,6 +59,23 @@ export default function ProductDetailPage() {
   } = useForm({
     resolver: zodResolver(productSchema),
   })
+
+  const {
+    register: registerAdjustment,
+    handleSubmit: handleSubmitAdjustment,
+    formState: { errors: adjustmentErrors },
+    reset: resetAdjustment,
+    watch: watchAdjustment,
+  } = useForm({
+    resolver: zodResolver(adjustmentSchema),
+    defaultValues: {
+      type: 'INVENTARIO',
+      quantity: 0,
+      reason: '',
+    },
+  })
+
+  const adjustmentType = watchAdjustment('type')
 
   const loadProduct = useCallback(async () => {
     try {
@@ -75,7 +108,106 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     loadProduct()
-  }, [loadProduct])
+    loadAdjustments()
+  }, [loadProduct, loadAdjustments])
+
+  const loadAdjustments = useCallback(async () => {
+    try {
+      const response = await api.get(`/products/${params.id}/adjustments`, {
+        params: { limit: 10 },
+      })
+      setAdjustments(response.data.data || [])
+    } catch (error) {
+      console.error('Erro ao carregar ajustes:', error)
+    }
+  }, [params.id])
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validar tipo de arquivo
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: 'Erro',
+          description: 'Por favor, selecione uma imagem',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      // Validar tamanho (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: 'Erro',
+          description: 'A imagem deve ter no máximo 5MB',
+          variant: 'destructive',
+        })
+        return
+      }
+
+      // Converter para base64
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setAdjustmentPhoto(reader.result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const onAdjustmentSubmit = async (data) => {
+    // Validar foto se for avaria
+    if (data.type === 'AVARIA' && !adjustmentPhoto) {
+      toast({
+        title: 'Erro',
+        description: 'Foto é obrigatória para ajuste de avaria',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setCreatingAdjustment(true)
+    try {
+      await api.post(`/products/${params.id}/adjustments`, {
+        ...data,
+        photoBase64: adjustmentPhoto || undefined,
+      })
+      toast({
+        title: 'Sucesso!',
+        description: 'Ajuste de estoque realizado com sucesso',
+      })
+      setShowAdjustmentModal(false)
+      setAdjustmentPhoto(null)
+      resetAdjustment()
+      loadProduct()
+      loadAdjustments()
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error.response?.data?.error?.message || 'Erro ao realizar ajuste',
+        variant: 'destructive',
+      })
+    } finally {
+      setCreatingAdjustment(false)
+    }
+  }
+
+  const openAdjustmentModal = () => {
+    setShowAdjustmentModal(true)
+    resetAdjustment()
+    setAdjustmentPhoto(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const closeAdjustmentModal = () => {
+    setShowAdjustmentModal(false)
+    resetAdjustment()
+    setAdjustmentPhoto(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
 
   const onSubmit = async (data) => {
     setSaving(true)
@@ -353,7 +485,17 @@ export default function ProductDetailPage() {
               {product.stockBalance && (
                 <Card className="gradient-card border-purple-100/50">
                   <CardHeader>
-                    <CardTitle>Estoque Atual</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Estoque Atual</CardTitle>
+                      <Button
+                        onClick={openAdjustmentModal}
+                        size="sm"
+                        className="bg-[#FF8C00] hover:bg-[#FF8C00]/90 text-white"
+                      >
+                        <ClipboardCheck className="h-4 w-4 mr-2" />
+                        Ajustar Estoque
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="text-center p-6">
@@ -365,6 +507,50 @@ export default function ProductDetailPage() {
                           Estoque mínimo: {product.minStock} {product.unit}
                         </p>
                       )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {adjustments.length > 0 && (
+                <Card className="gradient-card border-orange-100/50">
+                  <CardHeader>
+                    <CardTitle>Últimos Ajustes de Estoque</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {adjustments.map((adjustment) => (
+                        <div
+                          key={adjustment.id}
+                          className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-3 bg-gray-50 rounded-lg"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-xs px-2 py-1 rounded-md font-semibold ${
+                                adjustment.type === 'AVARIA'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                {adjustment.type === 'AVARIA' ? 'Avaria' : 'Inventário'}
+                              </span>
+                              {adjustment.hasPhoto && (
+                                <Camera className="h-4 w-4 text-gray-600" />
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-gray-900">{adjustment.reason}</p>
+                            <p className="text-xs text-gray-600 mt-1">
+                              {adjustment.createdBy?.name} • {formatDate(adjustment.createdAt)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-sm font-bold ${
+                              Number(adjustment.quantity) > 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {Number(adjustment.quantity) > 0 ? '+' : ''}{Number(adjustment.quantity)} {product.unit}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
@@ -426,6 +612,147 @@ export default function ProductDetailPage() {
                 </CardContent>
               </Card>
             </div>
+          </div>
+        )}
+
+        {/* Modal de Ajuste de Estoque */}
+        {showAdjustmentModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md gradient-card border-orange-100/50 shadow-glow-lg">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xl text-[#FF8C00]">Ajustar Estoque</CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={closeAdjustmentModal}
+                    className="h-8 w-8 p-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmitAdjustment(onAdjustmentSubmit)} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="adjustmentType">Tipo de Ajuste *</Label>
+                    <select
+                      id="adjustmentType"
+                      {...registerAdjustment('type')}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="INVENTARIO">Inventário</option>
+                      <option value="AVARIA">Avaria</option>
+                    </select>
+                    {adjustmentErrors.type && (
+                      <p className="text-sm text-red-600">{adjustmentErrors.type.message}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="adjustmentQuantity">
+                      Quantidade * (use negativo para redução, positivo para aumento)
+                    </Label>
+                    <Input
+                      id="adjustmentQuantity"
+                      type="number"
+                      step="0.01"
+                      {...registerAdjustment('quantity', { valueAsNumber: true })}
+                      placeholder="Ex: -5 ou +10"
+                    />
+                    {adjustmentErrors.quantity && (
+                      <p className="text-sm text-red-600">{adjustmentErrors.quantity.message}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="adjustmentReason">Motivo *</Label>
+                    <textarea
+                      id="adjustmentReason"
+                      {...registerAdjustment('reason')}
+                      rows={3}
+                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      placeholder="Descreva o motivo do ajuste..."
+                    />
+                    {adjustmentErrors.reason && (
+                      <p className="text-sm text-red-600">{adjustmentErrors.reason.message}</p>
+                    )}
+                  </div>
+
+                  {adjustmentType === 'AVARIA' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="adjustmentPhoto">
+                        Foto da Avaria * (obrigatório para avaria)
+                      </Label>
+                      <input
+                        ref={fileInputRef}
+                        id="adjustmentPhoto"
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePhotoChange}
+                        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      />
+                      {adjustmentPhoto && (
+                        <div className="mt-2">
+                          <img
+                            src={adjustmentPhoto}
+                            alt="Preview"
+                            className="max-w-full h-32 object-contain rounded border"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setAdjustmentPhoto(null)
+                              if (fileInputRef.current) {
+                                fileInputRef.current.value = ''
+                              }
+                            }}
+                            className="mt-2 text-red-600"
+                          >
+                            Remover foto
+                          </Button>
+                        </div>
+                      )}
+                      {!adjustmentPhoto && (
+                        <p className="text-xs text-gray-600">
+                          Por favor, anexe uma foto da avaria
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-4 pt-4 border-t">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={closeAdjustmentModal}
+                      disabled={creatingAdjustment}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={creatingAdjustment}
+                      className="bg-[#FF8C00] hover:bg-[#FF8C00]/90 text-white"
+                    >
+                      {creatingAdjustment ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Registrar Ajuste
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           </div>
         )}
       </div>

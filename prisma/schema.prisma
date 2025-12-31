@@ -23,6 +23,7 @@ model User {
   createdSales            SalesOrder[]      @relation("SalesCreatedBy")
   createdSalesReturns      SalesReturn[]     @relation("SalesReturnCreatedBy")
   createdStockMovements    StockMovement[]
+  createdStockAdjustments  StockAdjustment[]
 
   @@map("users")
 }
@@ -80,8 +81,9 @@ model Product {
   purchaseItems  PurchaseItem[]
   salesItems     SalesItem[]
   returnItems    SalesReturnItem[]
-  stockBalance   StockBalance?
-  stockMovements StockMovement[]
+  stockBalance    StockBalance?
+  stockMovements  StockMovement[]
+  stockAdjustments StockAdjustment[]
 
   @@map("products")
 }
@@ -113,6 +115,23 @@ model StockMovement {
   @@index([productId])
   @@index([createdAt])
   @@map("stock_movements")
+}
+
+model StockAdjustment {
+  id            String                @id @default(uuid())
+  productId     String                @map("product_id")
+  type          StockAdjustmentType
+  quantity      Decimal               @db.Decimal(10, 2)
+  reason        String
+  photoBase64   String?               @map("photo_base64") @db.Text
+  createdById   String                @map("created_by")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  product       Product               @relation(fields: [productId], references: [id])
+  createdBy     User                  @relation(fields: [createdById], references: [id])
+
+  @@index([productId])
+  @@index([createdAt])
+  @@map("stock_adjustments")
 }
 
 model PurchaseOrder {
@@ -433,6 +452,11 @@ enum ReferenceType {
   MANUAL
 }
 
+enum StockAdjustmentType {
+  AVARIA
+  INVENTARIO
+}
+
 enum AccountStatus {
   OPEN
   PAID
@@ -483,6 +507,7 @@ enum CreditStatus {
   EXPIRED
   CANCELED
 }
+
 
 
 
