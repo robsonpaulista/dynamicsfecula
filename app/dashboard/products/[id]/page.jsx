@@ -106,11 +106,6 @@ export default function ProductDetailPage() {
     }
   }, [params.id, router, toast, reset])
 
-  useEffect(() => {
-    loadProduct()
-    loadAdjustments()
-  }, [loadProduct, loadAdjustments])
-
   const loadAdjustments = useCallback(async () => {
     try {
       const response = await api.get(`/products/${params.id}/adjustments`, {
@@ -121,6 +116,11 @@ export default function ProductDetailPage() {
       console.error('Erro ao carregar ajustes:', error)
     }
   }, [params.id])
+
+  useEffect(() => {
+    loadProduct()
+    loadAdjustments()
+  }, [loadProduct, loadAdjustments])
 
   const handlePhotoChange = (e) => {
     const file = e.target.files?.[0]
