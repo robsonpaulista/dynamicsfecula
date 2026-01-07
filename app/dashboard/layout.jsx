@@ -14,8 +14,6 @@ import {
   Menu,
   Building2,
   UserCircle,
-  ChevronLeft,
-  ChevronRight
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
@@ -141,9 +139,13 @@ export default function DashboardLayout({ children }) {
         }`}>
           <div className={`p-6 border-b border-[#00B299]/20 ${sidebarCollapsed ? 'px-4' : ''}`}>
             <div className={`flex items-center gap-3 mb-2 ${sidebarCollapsed ? 'justify-center' : ''}`}>
-              <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center shadow-glow-lg flex-shrink-0">
-                <span className="text-white font-bold text-lg">D</span>
-              </div>
+              <button
+                onClick={toggleSidebar}
+                className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center shadow-glow-lg flex-shrink-0 hover:shadow-glow-lg hover:scale-105 transition-all cursor-pointer group"
+                title={sidebarCollapsed ? 'Expandir' : 'Recolher'}
+              >
+                <span className="text-white font-bold text-lg group-hover:scale-110 transition-transform">D</span>
+              </button>
               {!sidebarCollapsed && (
                 <div className="flex-1 min-w-0">
                   <h1 className="text-xl font-bold text-[#00B299] truncate">
@@ -183,19 +185,6 @@ export default function DashboardLayout({ children }) {
             >
               <LogOut className="h-4 w-4 flex-shrink-0" />
               {!sidebarCollapsed && <span className="ml-2">Sair</span>}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className={`w-full mt-2 hover:bg-[#00B299]/10 ${sidebarCollapsed ? 'justify-center' : ''}`}
-              title={sidebarCollapsed ? 'Expandir' : 'Recolher'}
-            >
-              {sidebarCollapsed ? (
-                <ChevronRight className="h-4 w-4 text-[#00B299]" />
-              ) : (
-                <ChevronLeft className="h-4 w-4 text-[#00B299]" />
-              )}
             </Button>
           </div>
         </aside>
