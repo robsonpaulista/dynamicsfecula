@@ -10,16 +10,45 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const from = searchParams.get('from')
     const to = searchParams.get('to')
-    const startDate = from ? new Date(from) : new Date(new Date().setDate(1))
-    const endDate = to ? new Date(to) : new Date()
+    
+    // Se from/to forem strings vazias explícitas, não filtrar (todos os dados)
+    // Se não fornecidos, usar período padrão (mês atual)
+    const hasFromParam = searchParams.has('from')
+    const hasToParam = searchParams.has('to')
+    
+    let startDate = null
+    let endDate = null
+    
+    if (hasFromParam && from === '') {
+      // Parâmetro explícito vazio = não filtrar
+      startDate = null
+    } else if (from && from !== '') {
+      startDate = new Date(from)
+    } else {
+      // Padrão: primeiro dia do mês atual
+      startDate = new Date(new Date().setDate(1))
+    }
+    
+    if (hasToParam && to === '') {
+      // Parâmetro explícito vazio = não filtrar
+      endDate = null
+    } else if (to && to !== '') {
+      endDate = new Date(to)
+    } else {
+      // Padrão: hoje
+      endDate = new Date()
+    }
 
-    // Saldo de caixa
+    // Saldo de caixa (sempre considera todas as transações até a data final, se especificada)
+    const cashTransactionsWhere = {}
+    if (endDate) {
+      cashTransactionsWhere.date = {
+        lte: endDate,
+      }
+    }
+    
     const cashTransactions = await prisma.cashTransaction.findMany({
-      where: {
-        date: {
-          lte: endDate,
-        },
-      },
+      where: cashTransactionsWhere,
     })
 
     const totalCashIn = cashTransactions
@@ -120,16 +149,19 @@ export async function GET(request) {
     const lowStockCount = productsWithStock.filter((p) => p.isLowStock).length
 
     // Vendas do período
-    const salesInPeriod = await prisma.salesOrder.aggregate({
-      where: {
-        saleDate: {
-          gte: startDate,
-          lte: endDate,
-        },
-        status: {
-          not: 'CANCELED',
-        },
+    const salesWhere = {
+      status: {
+        not: 'CANCELED',
       },
+    }
+    if (startDate || endDate) {
+      salesWhere.saleDate = {}
+      if (startDate) salesWhere.saleDate.gte = startDate
+      if (endDate) salesWhere.saleDate.lte = endDate
+    }
+    
+    const salesInPeriod = await prisma.salesOrder.aggregate({
+      where: salesWhere,
       _sum: {
         total: true,
       },
@@ -139,16 +171,19 @@ export async function GET(request) {
     })
 
     // Compras do período
-    const purchasesInPeriod = await prisma.purchaseOrder.aggregate({
-      where: {
-        issueDate: {
-          gte: startDate,
-          lte: endDate,
-        },
-        status: {
-          not: 'CANCELED',
-        },
+    const purchasesWhere = {
+      status: {
+        not: 'CANCELED',
       },
+    }
+    if (startDate || endDate) {
+      purchasesWhere.issueDate = {}
+      if (startDate) purchasesWhere.issueDate.gte = startDate
+      if (endDate) purchasesWhere.issueDate.lte = endDate
+    }
+    
+    const purchasesInPeriod = await prisma.purchaseOrder.aggregate({
+      where: purchasesWhere,
       _sum: {
         total: true,
       },
@@ -158,14 +193,17 @@ export async function GET(request) {
     })
 
     // Despesas pagas no período
+    const expensesWhere = {
+      status: 'PAID',
+    }
+    if (startDate || endDate) {
+      expensesWhere.paidAt = {}
+      if (startDate) expensesWhere.paidAt.gte = startDate
+      if (endDate) expensesWhere.paidAt.lte = endDate
+    }
+    
     const expensesPaid = await prisma.accountsPayable.aggregate({
-      where: {
-        status: 'PAID',
-        paidAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
+      where: expensesWhere,
       _sum: {
         amount: true,
       },
@@ -175,14 +213,17 @@ export async function GET(request) {
     })
 
     // Receitas recebidas no período
+    const incomeWhere = {
+      status: 'RECEIVED',
+    }
+    if (startDate || endDate) {
+      incomeWhere.receivedAt = {}
+      if (startDate) incomeWhere.receivedAt.gte = startDate
+      if (endDate) incomeWhere.receivedAt.lte = endDate
+    }
+    
     const incomeReceived = await prisma.accountsReceivable.aggregate({
-      where: {
-        status: 'RECEIVED',
-        receivedAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
+      where: incomeWhere,
       _sum: {
         amount: true,
       },
@@ -224,6 +265,8 @@ export async function GET(request) {
     )
   }
 }
+
+
 
 
 

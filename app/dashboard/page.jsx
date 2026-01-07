@@ -12,14 +12,22 @@ import {
   TrendingDown, 
   Package,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Calendar,
+  RefreshCw
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [dashboardData, setDashboardData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [periodType, setPeriodType] = useState('currentMonth') // currentMonth, lastMonth, year, all
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -30,18 +38,63 @@ export default function DashboardPage() {
     if (user) {
       loadDashboard()
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading, router, loadDashboard])
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     try {
-      const response = await api.get('/dashboard')
+      setLoading(true)
+      const today = new Date()
+      let from, to
+
+      switch (periodType) {
+        case 'currentMonth':
+          from = new Date(today.getFullYear(), today.getMonth(), 1)
+          to = today
+          break
+        case 'lastMonth':
+          from = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+          to = new Date(today.getFullYear(), today.getMonth(), 0)
+          break
+        case 'year':
+          from = new Date(today.getFullYear(), 0, 1)
+          to = today
+          break
+        case 'all':
+          from = null
+          to = null
+          break
+        case 'custom':
+          from = customFrom ? new Date(customFrom) : null
+          to = customTo ? new Date(customTo) : null
+          break
+        default:
+          from = new Date(today.getFullYear(), today.getMonth(), 1)
+          to = today
+      }
+
+      const params = {}
+      
+      // Se for 'all', enviar parâmetros vazios para não filtrar
+      if (periodType === 'all') {
+        params.from = ''
+        params.to = ''
+      } else {
+        if (from) {
+          params.from = from.toISOString().split('T')[0]
+        }
+        if (to) {
+          params.to = to.toISOString().split('T')[0]
+        }
+      }
+
+      const response = await api.get('/dashboard', { params })
       setDashboardData(response.data.data)
     } catch (error) {
       console.error('Erro ao carregar dashboard:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [periodType, customFrom, customTo])
 
   if (authLoading || loading) {
     return (
@@ -88,12 +141,59 @@ export default function DashboardPage() {
     <div className="min-h-screen p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-[#00B299]">
-            Dashboard
-          </h1>
-          <p className="text-gray-600 mt-1 md:mt-2 text-sm md:text-base">
-            Bem-vindo, <span className="font-semibold text-[#00B299]">{user?.name}</span>
-          </p>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-[#00B299]">
+                Dashboard
+              </h1>
+              <p className="text-gray-600 mt-1 md:mt-2 text-sm md:text-base">
+                Bem-vindo, <span className="font-semibold text-[#00B299]">{user?.name}</span>
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <div className="flex gap-2">
+                <select
+                  value={periodType}
+                  onChange={(e) => setPeriodType(e.target.value)}
+                  className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm min-w-[140px]"
+                >
+                  <option value="currentMonth">Mês Atual</option>
+                  <option value="lastMonth">Mês Anterior</option>
+                  <option value="year">Ano Atual</option>
+                  <option value="all">Todos</option>
+                  <option value="custom">Personalizado</option>
+                </select>
+                {periodType === 'custom' && (
+                  <>
+                    <Input
+                      type="date"
+                      value={customFrom}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      placeholder="De"
+                      className="w-36 text-sm"
+                    />
+                    <Input
+                      type="date"
+                      value={customTo}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      placeholder="Até"
+                      className="w-36 text-sm"
+                    />
+                  </>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadDashboard}
+                disabled={loading}
+                className="hover:bg-[#00B299]/10"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
