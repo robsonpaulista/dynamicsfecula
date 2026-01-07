@@ -27,17 +27,6 @@ export default function DashboardPage() {
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login')
-      return
-    }
-
-    if (user) {
-      loadDashboard()
-    }
-  }, [user, authLoading, router, loadDashboard])
-
   const loadDashboard = useCallback(async () => {
     try {
       setLoading(true)
@@ -93,6 +82,17 @@ export default function DashboardPage() {
       setLoading(false)
     }
   }, [periodType, customFrom, customTo])
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login')
+      return
+    }
+
+    if (user) {
+      loadDashboard()
+    }
+  }, [user, authLoading, router, loadDashboard])
 
   if (authLoading || loading) {
     return (
