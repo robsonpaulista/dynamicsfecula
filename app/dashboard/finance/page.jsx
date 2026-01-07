@@ -20,6 +20,9 @@ export default function FinancePage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState(null)
   const [paymentSources, setPaymentSources] = useState([{ investorId: '', amount: '' }])
+  const [showReceiveModal, setShowReceiveModal] = useState(false)
+  const [selectedARAccount, setSelectedARAccount] = useState(null)
+  const [receivedAmount, setReceivedAmount] = useState('')
   const { toast } = useToast()
 
   useEffect(() => {
@@ -136,20 +139,53 @@ export default function FinancePage() {
     }
   }
 
-  const handleReceiveAccount = async (accountId) => {
-    if (!confirm('Deseja confirmar o recebimento desta conta?')) {
+  const openReceiveModal = (account) => {
+    setSelectedARAccount(account)
+    setReceivedAmount(Number(account.amount).toFixed(2))
+    setShowReceiveModal(true)
+  }
+
+  const closeReceiveModal = () => {
+    setShowReceiveModal(false)
+    setSelectedARAccount(null)
+    setReceivedAmount('')
+  }
+
+  const handleReceiveAccount = async () => {
+    if (!selectedARAccount) return
+
+    const accountAmount = Number(selectedARAccount.amount)
+    const receivedValue = parseFloat(receivedAmount || 0)
+
+    if (receivedValue <= 0) {
+      toast({
+        title: 'Erro',
+        description: 'Valor recebido deve ser maior que zero',
+        variant: 'destructive',
+      })
       return
     }
 
-    setProcessingAccount(`ar-${accountId}`)
+    if (receivedValue > accountAmount) {
+      toast({
+        title: 'Erro',
+        description: 'Valor recebido não pode ser maior que o valor da conta',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setProcessingAccount(`ar-${selectedARAccount.id}`)
     try {
-      await api.post(`/finance/ar/${accountId}/receive`, {
+      const response = await api.post(`/finance/ar/${selectedARAccount.id}/receive`, {
         receivedAt: new Date().toISOString(),
+        receivedAmount: receivedValue,
       })
       toast({
         title: 'Sucesso!',
-        description: 'Conta a receber baixada com sucesso',
+        description: response.data.message || 'Conta a receber baixada com sucesso',
       })
+      closeReceiveModal()
       loadFinance()
     } catch (error) {
       toast({
@@ -359,7 +395,7 @@ export default function FinancePage() {
                       {ar.status === 'OPEN' && (
                         <Button
                           size="sm"
-                          onClick={() => handleReceiveAccount(ar.id)}
+                          onClick={() => openReceiveModal(ar)}
                           disabled={processingAccount === `ar-${ar.id}`}
                           className="bg-[#00B299] hover:bg-[#00B299]/90 text-white flex-shrink-0"
                         >
@@ -384,6 +420,92 @@ export default function FinancePage() {
           </Card>
         </div>
       </div>
+
+      {/* Modal de Recebimento de Conta a Receber */}
+      {showReceiveModal && selectedARAccount && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Baixar Conta a Receber</CardTitle>
+              <Button variant="ghost" size="icon" onClick={closeReceiveModal}>
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Descrição</p>
+                <p className="font-semibold">{selectedARAccount.description}</p>
+                <p className="text-sm text-gray-600 mt-2">Valor Total da Conta</p>
+                <p className="text-xl font-bold text-[#00B299]">{formatCurrency(Number(selectedARAccount.amount))}</p>
+                {selectedARAccount.customer?.name && (
+                  <p className="text-sm text-gray-600 mt-2">
+                    Cliente: <span className="font-semibold">{selectedARAccount.customer.name}</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="received-amount" className="text-base font-semibold">
+                  Valor a Receber *
+                </Label>
+                <Input
+                  id="received-amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max={Number(selectedARAccount.amount)}
+                  value={receivedAmount}
+                  onChange={(e) => setReceivedAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-gray-500">
+                  Deixe o valor padrão ({formatCurrency(Number(selectedARAccount.amount))}) para baixa total ou informe um valor menor para baixa parcial
+                </p>
+                {parseFloat(receivedAmount || 0) > 0 && parseFloat(receivedAmount || 0) < Number(selectedARAccount.amount) && (
+                  <div className="p-3 bg-blue-50 rounded-lg mt-2">
+                    <p className="text-sm text-blue-800">
+                      <strong>Baixa Parcial:</strong> Será recebido {formatCurrency(parseFloat(receivedAmount || 0))}
+                    </p>
+                    <p className="text-sm text-blue-700 mt-1">
+                      Saldo pendente: {formatCurrency(Number(selectedARAccount.amount) - parseFloat(receivedAmount || 0))}
+                    </p>
+                  </div>
+                )}
+                {parseFloat(receivedAmount || 0) === Number(selectedARAccount.amount) && (
+                  <div className="p-3 bg-green-50 rounded-lg mt-2">
+                    <p className="text-sm text-green-800">
+                      <strong>Baixa Total:</strong> A conta será totalmente recebida e marcada como concluída
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 justify-end pt-4 border-t">
+                <Button variant="outline" onClick={closeReceiveModal}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleReceiveAccount}
+                  disabled={processingAccount === `ar-${selectedARAccount.id}` || !receivedAmount || parseFloat(receivedAmount || 0) <= 0}
+                  className="bg-[#00B299] hover:bg-[#00B299]/90 text-white"
+                >
+                  {processingAccount === `ar-${selectedARAccount.id}` ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Baixando...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Confirmar Recebimento
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Modal de Fontes Pagadoras */}
       {showPaymentModal && selectedAccount && (
