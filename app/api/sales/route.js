@@ -295,18 +295,32 @@ export async function POST(request) {
         const orderTotal = Number(total)
         const totalInstallments = data.installments.reduce((sum, inst) => sum + inst.amount, 0)
 
-        // Validar se a soma das parcelas não excede o total do pedido
-        if (totalInstallments > orderTotal + 0.01) {
-          return NextResponse.json(
-            { 
-              success: false, 
-              error: { 
-                message: `A soma das parcelas (R$ ${totalInstallments.toFixed(2)}) excede o total do pedido (R$ ${orderTotal.toFixed(2)})`, 
-                code: 'BAD_REQUEST' 
-              } 
-            },
-            { status: 400 }
-          )
+        // Validar se a soma das parcelas é igual ao total do pedido (tolerância de 0.01 para arredondamentos)
+        const difference = Math.abs(totalInstallments - orderTotal)
+        if (difference > 0.01) {
+          if (totalInstallments > orderTotal) {
+            return NextResponse.json(
+              { 
+                success: false, 
+                error: { 
+                  message: `A soma das parcelas (R$ ${totalInstallments.toFixed(2)}) excede o total do pedido (R$ ${orderTotal.toFixed(2)})`, 
+                  code: 'BAD_REQUEST' 
+                } 
+              },
+              { status: 400 }
+            )
+          } else {
+            return NextResponse.json(
+              { 
+                success: false, 
+                error: { 
+                  message: `A soma das parcelas (R$ ${totalInstallments.toFixed(2)}) deve ser igual ao total do pedido (R$ ${orderTotal.toFixed(2)}). Diferença: R$ ${(orderTotal - totalInstallments).toFixed(2)}`, 
+                  code: 'BAD_REQUEST' 
+                } 
+              },
+              { status: 400 }
+            )
+          }
         }
 
         const baseDescription = `Pedido de venda #${order.id.slice(0, 8)}`
@@ -430,6 +444,9 @@ export async function POST(request) {
     )
   }
 }
+
+
+
 
 
 

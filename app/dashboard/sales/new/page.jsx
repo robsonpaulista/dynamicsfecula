@@ -181,12 +181,22 @@ export default function NewSalesPage() {
         return
       }
 
-      if (totalAmount > orderTotal + 0.01) {
-        toast({
-          title: 'Erro',
-          description: `A soma das parcelas (R$ ${totalAmount.toFixed(2)}) excede o total do pedido (R$ ${orderTotal.toFixed(2)})`,
-          variant: 'destructive',
-        })
+      // Validar se a soma das parcelas é igual ao total do pedido (tolerância de 0.01 para arredondamentos)
+      const difference = Math.abs(totalAmount - orderTotal)
+      if (difference > 0.01) {
+        if (totalAmount > orderTotal) {
+          toast({
+            title: 'Erro',
+            description: `A soma das parcelas (R$ ${totalAmount.toFixed(2)}) excede o total do pedido (R$ ${orderTotal.toFixed(2)})`,
+            variant: 'destructive',
+          })
+        } else {
+          toast({
+            title: 'Erro',
+            description: `A soma das parcelas (R$ ${totalAmount.toFixed(2)}) deve ser igual ao total do pedido (R$ ${orderTotal.toFixed(2)}). Diferença: R$ ${(orderTotal - totalAmount).toFixed(2)}`,
+            variant: 'destructive',
+          })
+        }
         setLoading(false)
         return
       }
