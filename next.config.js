@@ -4,17 +4,14 @@ const nextConfig = {
   images: {
     domains: [],
   },
-  // Headers de segurança globais (excluindo arquivos estáticos do Next.js)
+  // Headers de segurança (aplicados apenas em rotas da aplicação)
+  // Os arquivos estáticos do Next.js (_next/static, _next/image) não recebem esses headers
   async headers() {
     return [
       {
-        // Aplicar headers apenas em rotas da aplicação, não em arquivos estáticos
-        source: '/:path((?!_next/static|_next/image|favicon.ico).*)',
+        // Aplicar em todas as rotas exceto arquivos estáticos
+        source: '/:path*',
         headers: [
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
           {
             key: 'X-Frame-Options',
             value: 'DENY',
@@ -26,6 +23,22 @@ const nextConfig = {
           {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
+          },
+        ],
+      },
+      {
+        // Aplicar X-Content-Type-Options apenas em rotas da aplicação (não em _next)
+        source: '/:path*',
+        missing: [
+          {
+            type: 'header',
+            key: 'x-nextjs-data',
+          },
+        ],
+        headers: [
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
           },
         ],
       },
