@@ -4,11 +4,12 @@ const nextConfig = {
   images: {
     domains: [],
   },
-  // Headers de segurança globais
+  // Headers de segurança globais (excluindo arquivos estáticos do Next.js)
   async headers() {
     return [
       {
-        source: '/:path*',
+        // Aplicar headers apenas em rotas da aplicação, não em arquivos estáticos
+        source: '/:path((?!_next/static|_next/image|favicon.ico).*)',
         headers: [
           {
             key: 'X-Content-Type-Options',
