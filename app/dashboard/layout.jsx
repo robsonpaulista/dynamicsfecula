@@ -19,7 +19,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 
 export default function DashboardLayout({ children }) {
-  const { user, logout } = useAuth()
+  const { user, logout, loading } = useAuth()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -31,10 +31,10 @@ export default function DashboardLayout({ children }) {
   })
 
   useEffect(() => {
-    if (!user) {
+    if (!loading && !user) {
       router.push('/login')
     }
-  }, [user, router])
+  }, [user, loading, router])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -62,6 +62,17 @@ export default function DashboardLayout({ children }) {
     { href: '/dashboard/investors', label: 'Investidores', icon: DollarSign },
     { href: '/dashboard/users', label: 'Usuários', icon: Users },
   ]
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F5] flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#00B299]"></div>
+          <p className="mt-4 text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!user) return null
 

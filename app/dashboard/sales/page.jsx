@@ -5,12 +5,15 @@ import api from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Plus, ShoppingCart } from 'lucide-react'
+import { Plus, ShoppingCart, XCircle, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { useToast } from '@/hooks/use-toast'
 
 export default function SalesPage() {
   const [sales, setSales] = useState([])
   const [loading, setLoading] = useState(true)
+  const [cancelingId, setCancelingId] = useState(null)
+  const { toast } = useToast()
 
   useEffect(() => {
     loadSales()
@@ -35,6 +38,26 @@ export default function SalesPage() {
       CANCELED: 'bg-red-100 text-red-800',
     }
     return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  const canCancel = (sale) => sale.status !== 'DELIVERED' && sale.status !== 'CANCELED'
+
+  const handleCancel = async (sale) => {
+    if (!confirm('Deseja realmente cancelar este pedido? Esta ação não pode ser desfeita.')) return
+    setCancelingId(sale.id)
+    try {
+      await api.patch(`/sales/${sale.id}`, { status: 'CANCELED' })
+      toast({ title: 'Sucesso', description: 'Pedido cancelado com sucesso' })
+      loadSales()
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error.response?.data?.error?.message || 'Erro ao cancelar pedido',
+        variant: 'destructive',
+      })
+    } finally {
+      setCancelingId(null)
+    }
   }
 
   return (
@@ -123,12 +146,29 @@ export default function SalesPage() {
                     </div>
                   )}
 
-                  <div className="mt-4">
-                    <Button variant="outline" className="w-full hover:bg-[#00B299]/10 hover:border-[#00B299] transition-all" asChild>
+                  <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                    <Button variant="outline" className="flex-1 hover:bg-[#00B299]/10 hover:border-[#00B299] transition-all" asChild>
                       <Link href={`/dashboard/sales/${sale.id}`}>
                         Ver Detalhes
                       </Link>
                     </Button>
+                    {canCancel(sale) && (
+                      <Button
+                        variant="outline"
+                        className="flex-1 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 transition-all"
+                        onClick={() => handleCancel(sale)}
+                        disabled={cancelingId === sale.id}
+                      >
+                        {cancelingId === sale.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                        ) : (
+                          <>
+                            <XCircle className="h-4 w-4 mr-2" />
+                            Cancelar
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 export default function FinancePage() {
   const [accountsPayable, setAccountsPayable] = useState([])
   const [accountsReceivable, setAccountsReceivable] = useState([])
+  const [summary, setSummary] = useState(null)
   const [investors, setInvestors] = useState([])
   const [loading, setLoading] = useState(true)
   const [processingAccount, setProcessingAccount] = useState(null)
@@ -34,13 +35,15 @@ export default function FinancePage() {
 
   const loadFinance = async () => {
     try {
-      const [apResponse, arResponse, investorsResponse] = await Promise.all([
+      const [apResponse, arResponse, summaryResponse, investorsResponse] = await Promise.all([
         api.get('/finance/ap'),
         api.get('/finance/ar'),
+        api.get('/finance/summary').catch(() => ({ data: { data: null } })),
         api.get('/investors', { params: { isActive: 'true', limit: 100 } }),
       ])
       setAccountsPayable(apResponse.data.data)
       setAccountsReceivable(arResponse.data.data)
+      setSummary(summaryResponse.data?.data ?? null)
       setInvestors(investorsResponse.data.data || [])
     } catch (error) {
       console.error('Erro ao carregar financeiro:', error)
@@ -49,12 +52,33 @@ export default function FinancePage() {
     }
   }
 
-  const totalAP = accountsPayable
-    .filter((ap) => ap.status === 'OPEN')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const openAP = accountsPayable.filter((ap) => ap.status === 'OPEN')
+  const openAR = accountsReceivable.filter((ar) => ar.status === 'OPEN')
+
+  const totalAP = summary?.accountsPayable?.totalOpen ?? openAP.reduce((sum, ap) => sum + Number(ap.amount), 0)
+  const countOpenAP = summary?.accountsPayable?.countOpen ?? openAP.length
+  const totalPaidAP = summary?.accountsPayable?.totalPaid ?? accountsPayable
+    .filter((ap) => ap.status === 'PAID')
+    .reduce((sum, ap) => sum + Number(ap.amount), 0)
+  const totalOverdueAP = summary?.accountsPayable?.totalOverdue ?? openAP
+    .filter((ap) => new Date(ap.dueDate) < today)
+    .reduce((sum, ap) => sum + Number(ap.amount), 0)
+  const totalUpcomingAP = summary?.accountsPayable?.totalUpcoming ?? openAP
+    .filter((ap) => new Date(ap.dueDate) >= today)
     .reduce((sum, ap) => sum + Number(ap.amount), 0)
 
-  const totalAR = accountsReceivable
-    .filter((ar) => ar.status === 'OPEN')
+  const totalAR = summary?.accountsReceivable?.totalOpen ?? openAR.reduce((sum, ar) => sum + Number(ar.amount), 0)
+  const countOpenAR = summary?.accountsReceivable?.countOpen ?? openAR.length
+  const totalReceivedAR = summary?.accountsReceivable?.totalReceived ?? accountsReceivable
+    .filter((ar) => ar.status === 'RECEIVED')
+    .reduce((sum, ar) => sum + Number(ar.amount), 0)
+  const totalOverdueAR = summary?.accountsReceivable?.totalOverdue ?? openAR
+    .filter((ar) => new Date(ar.dueDate) < today)
+    .reduce((sum, ar) => sum + Number(ar.amount), 0)
+  const totalUpcomingAR = summary?.accountsReceivable?.totalUpcoming ?? openAR
+    .filter((ar) => new Date(ar.dueDate) >= today)
     .reduce((sum, ar) => sum + Number(ar.amount), 0)
 
   const openPaymentModal = (account) => {
@@ -251,15 +275,27 @@ export default function FinancePage() {
                 Contas a Pagar
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <p className="text-3xl md:text-4xl font-bold text-[#FF8C00]">
                 {formatCurrency(totalAP)}
               </p>
-              <p className="text-sm text-gray-600 mt-2">
-                <span className="font-semibold text-[#FF8C00]">
-                  {accountsPayable.filter((ap) => ap.status === 'OPEN').length}
-                </span> contas abertas
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold text-[#FF8C00]">{countOpenAP}</span> contas abertas
               </p>
+              <div className="pt-2 border-t border-[#FF8C00]/20 space-y-1.5 text-sm">
+                <p className="flex justify-between text-gray-700">
+                  <span>Já pago</span>
+                  <span className="font-semibold text-gray-900">{formatCurrency(totalPaidAP)}</span>
+                </p>
+                <p className="flex justify-between text-gray-700">
+                  <span>Vencido (em aberto)</span>
+                  <span className="font-semibold text-red-600">{formatCurrency(totalOverdueAP)}</span>
+                </p>
+                <p className="flex justify-between text-gray-700">
+                  <span>A vencer</span>
+                  <span className="font-semibold text-[#FF8C00]">{formatCurrency(totalUpcomingAP)}</span>
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -272,15 +308,27 @@ export default function FinancePage() {
                 Contas a Receber
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <p className="text-3xl md:text-4xl font-bold text-[#00B299]">
                 {formatCurrency(totalAR)}
               </p>
-              <p className="text-sm text-gray-600 mt-2">
-                <span className="font-semibold text-[#00B299]">
-                  {accountsReceivable.filter((ar) => ar.status === 'OPEN').length}
-                </span> contas abertas
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold text-[#00B299]">{countOpenAR}</span> contas abertas
               </p>
+              <div className="pt-2 border-t border-[#00B299]/20 space-y-1.5 text-sm">
+                <p className="flex justify-between text-gray-700">
+                  <span>Já recebido</span>
+                  <span className="font-semibold text-gray-900">{formatCurrency(totalReceivedAR)}</span>
+                </p>
+                <p className="flex justify-between text-gray-700">
+                  <span>Vencido (em aberto)</span>
+                  <span className="font-semibold text-red-600">{formatCurrency(totalOverdueAR)}</span>
+                </p>
+                <p className="flex justify-between text-gray-700">
+                  <span>A vencer</span>
+                  <span className="font-semibold text-[#00B299]">{formatCurrency(totalUpcomingAR)}</span>
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>

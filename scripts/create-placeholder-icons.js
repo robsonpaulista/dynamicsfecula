@@ -44,3 +44,7 @@ console.log('💡 Você pode usar: https://realfavicongenerator.net/ ou https://
 
 
 
+
+
+
+

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ArrowLeft, ShoppingCart, Calendar, User, Package, DollarSign, Loader2, Edit, X, Trash2, CheckCircle, Truck, FileText, Printer, RotateCcw, AlertCircle } from 'lucide-react'
+import { ArrowLeft, ShoppingCart, Calendar, User, Package, DollarSign, Loader2, Edit, X, Trash2, CheckCircle, Truck, FileText, Printer, RotateCcw, AlertCircle, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useToast } from '@/hooks/use-toast'
 import { saveSalesOrderPDF, printSalesOrder } from '@/lib/pdf'
@@ -24,6 +24,7 @@ export default function SalesDetailPage() {
   const [savingAccount, setSavingAccount] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(null)
   const [deliveringOrder, setDeliveringOrder] = useState(false)
+  const [cancelingOrder, setCancelingOrder] = useState(false)
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [returnItems, setReturnItems] = useState([])
   const [returnReason, setReturnReason] = useState('')
@@ -185,6 +186,30 @@ export default function SalesDetailPage() {
       })
     } finally {
       setDeliveringOrder(false)
+    }
+  }
+
+  const handleCancelOrder = async () => {
+    if (!confirm('Deseja realmente cancelar este pedido? Esta ação não pode ser desfeita.')) {
+      return
+    }
+
+    setCancelingOrder(true)
+    try {
+      await api.patch(`/sales/${params.id}`, { status: 'CANCELED' })
+      toast({
+        title: 'Sucesso!',
+        description: 'Pedido cancelado com sucesso',
+      })
+      loadSalesOrder()
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error.response?.data?.error?.message || 'Erro ao cancelar pedido',
+        variant: 'destructive',
+      })
+    } finally {
+      setCancelingOrder(false)
     }
   }
 
@@ -526,23 +551,43 @@ export default function SalesDetailPage() {
                   <p className="text-sm text-gray-600 mb-4">
                     Ao confirmar a entrega do pedido, o estoque será atualizado automaticamente com a baixa dos produtos vendidos.
                   </p>
-                  <Button
-                    onClick={handleDeliverOrder}
-                    disabled={deliveringOrder}
-                    className="w-full bg-[#00B299] hover:shadow-glow-lg transition-all"
-                  >
-                    {deliveringOrder ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Confirmando...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Confirmar Entrega
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      onClick={handleDeliverOrder}
+                      disabled={deliveringOrder || cancelingOrder}
+                      className="flex-1 bg-[#00B299] hover:shadow-glow-lg transition-all"
+                    >
+                      {deliveringOrder ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Confirmando...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Confirmar Entrega
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleCancelOrder}
+                      disabled={deliveringOrder || cancelingOrder}
+                      className="flex-1 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 transition-all"
+                    >
+                      {cancelingOrder ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Cancelando...
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="mr-2 h-4 w-4" />
+                          Cancelar Pedido
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             )}
