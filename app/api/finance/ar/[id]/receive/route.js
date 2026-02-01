@@ -20,89 +20,85 @@ export async function POST(request, { params }) {
     const validatedData = receiveSchema.parse(body)
     const { receivedAt, paymentMethodId, receivedAmount } = validatedData
 
-    const account = await prisma.accountsReceivable.findUnique({
-      where: { id: params.id },
+    const arId = params.id
+
+    const updatedAccount = await prisma.$transaction(async (tx) => {
+      // Lock da linha para evitar baixa duplicada (race condition: dois cliques ou duas requisições simultâneas)
+      const locked = await tx.$queryRaw`
+        SELECT id FROM accounts_receivable WHERE id = ${arId} FOR UPDATE
+      `
+      if (!locked || locked.length === 0) {
+        throw new NotFoundError('Conta a receber não encontrada')
+      }
+
+      const account = await tx.accountsReceivable.findUnique({
+        where: { id: arId },
+      })
+
+      if (!account) {
+        throw new NotFoundError('Conta a receber não encontrada')
+      }
+
+      if (account.status === 'RECEIVED') {
+        throw new BadRequestError('Conta já foi totalmente recebida')
+      }
+
+      const accountAmount = account.amount
+      const receivedValue = receivedAmount 
+        ? new Decimal(receivedAmount) 
+        : accountAmount
+      const remainingAmount = accountAmount.minus(receivedValue)
+
+      if (receivedValue.lessThanOrEqualTo(0)) {
+        throw new BadRequestError('Valor recebido deve ser maior que zero')
+      }
+
+      if (receivedValue.greaterThan(accountAmount)) {
+        throw new BadRequestError('Valor recebido não pode ser maior que o valor da conta')
+      }
+
+      const isPartialPayment = remainingAmount.greaterThan(new Decimal(0.01))
+
+      const updateData = {
+        paymentMethodId: paymentMethodId || null,
+      }
+      if (isPartialPayment) {
+        updateData.amount = remainingAmount
+      } else {
+        updateData.status = 'RECEIVED'
+        updateData.receivedAt = new Date(receivedAt || new Date())
+      }
+
+      const updated = await tx.accountsReceivable.update({
+        where: { id: arId },
+        data: updateData,
+      })
+
+      await tx.cashTransaction.create({
+        data: {
+          type: 'IN',
+          origin: 'AR',
+          originId: account.id,
+          date: new Date(receivedAt || new Date()),
+          amount: receivedValue,
+          description: isPartialPayment 
+            ? `${account.description} (Baixa parcial: ${receivedValue.toFixed(2)} de ${accountAmount.toFixed(2)})`
+            : account.description,
+          categoryId: account.categoryId,
+          createdById: user.id,
+        },
+      })
+
+      return { updated, isPartialPayment, receivedValue, remainingAmount, account }
     })
 
-    if (!account) {
-      return NextResponse.json(
-        { success: false, error: { message: 'Conta a receber não encontrada', code: 'NOT_FOUND' } },
-        { status: 404 }
-      )
-    }
-
-    if (account.status === 'RECEIVED') {
-      return NextResponse.json(
-        { success: false, error: { message: 'Conta já foi totalmente recebida', code: 'BAD_REQUEST' } },
-        { status: 400 }
-      )
-    }
-
-    const accountAmount = account.amount
-    const receivedValue = receivedAmount 
-      ? new Decimal(receivedAmount) 
-      : accountAmount
-    const remainingAmount = accountAmount.minus(receivedValue)
-
-    // Validar valor recebido
-    if (receivedValue.lessThanOrEqualTo(0)) {
-      return NextResponse.json(
-        { success: false, error: { message: 'Valor recebido deve ser maior que zero', code: 'BAD_REQUEST' } },
-        { status: 400 }
-      )
-    }
-
-    if (receivedValue.greaterThan(accountAmount)) {
-      return NextResponse.json(
-        { success: false, error: { message: 'Valor recebido não pode ser maior que o valor da conta', code: 'BAD_REQUEST' } },
-        { status: 400 }
-      )
-    }
-
-    // Se o valor recebido for menor que o total (tolerância de 0.01 para arredondamentos)
-    const isPartialPayment = remainingAmount.greaterThan(new Decimal(0.01))
-
-    // Atualizar conta
-    const updateData = {
-      paymentMethodId: paymentMethodId || null,
-    }
-
-    if (isPartialPayment) {
-      // Baixa parcial: reduzir o amount e manter status OPEN
-      updateData.amount = remainingAmount
-      // Não atualiza receivedAt nem status
-    } else {
-      // Baixa total: marcar como recebida
-      updateData.status = 'RECEIVED'
-      updateData.receivedAt = new Date(receivedAt || new Date())
-    }
-
-    const updatedAccount = await prisma.accountsReceivable.update({
-      where: { id: params.id },
-      data: updateData,
-    })
-
-    // Criar transação de caixa com o valor recebido
-    await prisma.cashTransaction.create({
-      data: {
-        type: 'IN',
-        origin: 'AR',
-        originId: account.id,
-        date: new Date(receivedAt || new Date()),
-        amount: receivedValue,
-        description: isPartialPayment 
-          ? `${account.description} (Baixa parcial: ${receivedValue.toFixed(2)} de ${accountAmount.toFixed(2)})`
-          : account.description,
-        categoryId: account.categoryId,
-        createdById: user.id,
-      },
-    })
+    const { updated, isPartialPayment, receivedValue, remainingAmount } = updatedAccount
 
     return NextResponse.json({
       success: true,
       data: {
-        ...updatedAccount,
-        amount: Number(updatedAccount.amount),
+        ...updated,
+        amount: Number(updated.amount),
       },
       message: isPartialPayment 
         ? `Baixa parcial de ${receivedValue.toFixed(2)} realizada. Saldo pendente: ${remainingAmount.toFixed(2)}`

@@ -11,7 +11,6 @@ export const metadata = {
   title: 'DynamicsADM - Sistema de Gestão',
   description: 'Sistema completo de gestão empresarial - Compras, Estoque, Vendas e Financeiro',
   manifest: '/manifest.json',
-  themeColor: '#00B299',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -29,13 +28,15 @@ export const metadata = {
       { url: '/icons/icon-192x192.svg', sizes: '192x192', type: 'image/svg+xml' },
     ],
   },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: 'cover',
-  },
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+  themeColor: '#00B299',
 }
 
 export default function RootLayout({ children }) {
@@ -50,7 +51,8 @@ export default function RootLayout({ children }) {
         <link rel="apple-touch-icon" href="/icons/icon-192x192.svg" />
       </head>
       <body className={inter.className} suppressHydrationWarning>
-        <ServiceWorkerRegistration />
+        {/* ServiceWorker desabilitado temporariamente - pode causar 404 em layout.css e page.js */}
+        {/* <ServiceWorkerRegistration /> */}
         <AuthProvider>
           {children}
           <Toaster />

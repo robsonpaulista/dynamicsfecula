@@ -47,7 +47,35 @@ export async function POST(request) {
       )
     }
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      return secureJsonResponse(
+        {
+          success: false,
+          error: {
+            message: 'Corpo da requisição inválido. Envie email e senha em JSON.',
+            code: 'INVALID_BODY',
+          },
+        },
+        400
+      )
+    }
+
+    if (!body || typeof body !== 'object') {
+      return secureJsonResponse(
+        {
+          success: false,
+          error: {
+            message: 'Email e senha são obrigatórios',
+            code: 'INVALID_BODY',
+          },
+        },
+        400
+      )
+    }
+
     const { email, password } = loginSchema.parse(body)
 
     // Buscar usuário

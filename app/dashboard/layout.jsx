@@ -6,6 +6,7 @@ import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { 
   LayoutDashboard, 
+  Activity,
   Package, 
   ShoppingCart, 
   Users, 
@@ -14,6 +15,7 @@ import {
   Menu,
   Building2,
   UserCircle,
+  ShieldCheck,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
@@ -31,9 +33,12 @@ export default function DashboardLayout({ children }) {
   })
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login')
-    }
+    if (loading) return
+    if (user) return
+    // Evitar redirecionar logo após login: token pode existir antes do estado do contexto atualizar
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    if (token) return
+    router.push('/login')
   }, [user, loading, router])
 
   useEffect(() => {
@@ -51,8 +56,9 @@ export default function DashboardLayout({ children }) {
     router.push('/login')
   }
 
-  const menuItems = [
+  const baseMenuItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/dashboard/raio-x', label: 'Raio X', icon: Activity },
     { href: '/dashboard/products', label: 'Produtos', icon: Package },
     { href: '/dashboard/suppliers', label: 'Fornecedores', icon: Building2 },
     { href: '/dashboard/customers', label: 'Clientes', icon: UserCircle },
@@ -62,6 +68,14 @@ export default function DashboardLayout({ children }) {
     { href: '/dashboard/investors', label: 'Investidores', icon: DollarSign },
     { href: '/dashboard/users', label: 'Usuários', icon: Users },
   ]
+
+  const menuItems = user?.role === 'ADMIN'
+    ? [
+        ...baseMenuItems.slice(0, -1),
+        { href: '/dashboard/auditoria', label: 'Auditoria', icon: ShieldCheck },
+        ...baseMenuItems.slice(-1),
+      ]
+    : baseMenuItems
 
   if (loading) {
     return (

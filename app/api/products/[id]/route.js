@@ -21,13 +21,29 @@ export async function GET(request, { params }) {
     const user = authenticate(request)
     authorize(user, 'ADMIN', 'ESTOQUE', 'COMPRAS', 'VENDAS')
 
+    const { searchParams } = new URL(request.url)
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
+
+    const movementsWhere = {}
+    if (from || to) {
+      movementsWhere.createdAt = {}
+      if (from) movementsWhere.createdAt.gte = new Date(from)
+      if (to) {
+        const toDate = new Date(to)
+        toDate.setHours(23, 59, 59, 999)
+        movementsWhere.createdAt.lte = toDate
+      }
+    }
+
     const product = await prisma.product.findUnique({
       where: { id: params.id },
       include: {
         stockBalance: true,
         stockMovements: {
-          take: 20,
-          orderBy: { createdAt: 'desc' },
+          where: Object.keys(movementsWhere).length ? movementsWhere : undefined,
+          take: 500,
+          orderBy: { createdAt: 'asc' },
           include: {
             createdBy: {
               select: {
@@ -81,22 +97,56 @@ export async function GET(request, { params }) {
                   name: true,
                 },
               },
+              items: {
+                where: { productId: movement.productId },
+                select: { unitPrice: true },
+              },
             },
           })
           if (salesOrder) {
+            const saleItem = salesOrder.items?.[0]
             reference = {
               type: 'SALE',
               customer: salesOrder.customer,
+              unitPrice: saleItem ? Number(saleItem.unitPrice) : null,
+              salesOrderStatus: salesOrder.status,
+              isCanceled: salesOrder.status === 'CANCELED',
             }
           }
+        } else if (movement.referenceType === 'RETURN' && movement.referenceId) {
+          const returnItem = await prisma.salesReturnItem.findFirst({
+            where: {
+              salesReturnId: movement.referenceId,
+              productId: movement.productId,
+            },
+          })
+          if (returnItem) {
+            reference = { type: 'RETURN', unitPrice: Number(returnItem.unitPrice) }
+          }
+        }
+        
+        let displayUnitPrice = movement.unitCost ? Number(movement.unitCost) : null
+        if (reference?.type === 'SALE' && reference.unitPrice != null) {
+          displayUnitPrice = reference.unitPrice
+        } else if (reference?.type === 'RETURN' && reference.unitPrice != null) {
+          displayUnitPrice = reference.unitPrice
+        } else if ((movement.referenceType === 'MANUAL' || movement.referenceType === 'INVENTORY') && !displayUnitPrice && product.costPrice) {
+          displayUnitPrice = Number(product.costPrice)
         }
         
         return {
           ...movement,
           reference,
+          displayUnitPrice,
         }
       })
     )
+
+    // Excluir movimentações de vendas canceladas (não devem aparecer como saída no extrato)
+    const movementsFiltered = movementsWithReferences.filter((m) => {
+      if (m.reference?.type === 'SALE' && m.reference.isCanceled) return false
+      return true
+    })
 
     // Serializar movimentações também
     const serializedProduct = {
@@ -108,9 +158,11 @@ export async function GET(request, { params }) {
         ...product.stockBalance,
         quantity: Number(product.stockBalance.quantity),
       } : null,
-      stockMovements: movementsWithReferences.map(movement => ({
+      stockMovements: movementsFiltered.map(movement => ({
         ...movement,
         quantity: Number(movement.quantity),
+        unitCost: movement.unitCost ? Number(movement.unitCost) : null,
+        displayUnitPrice: movement.displayUnitPrice ?? (movement.unitCost ? Number(movement.unitCost) : null),
       })),
     }
 

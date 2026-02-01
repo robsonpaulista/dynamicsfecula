@@ -46,6 +46,9 @@ export async function GET(request, { params }) {
           orderBy: { createdAt: 'desc' },
         },
         accountsPayable: {
+          include: {
+            paymentMethod: { select: { id: true, name: true } },
+          },
           orderBy: { dueDate: 'asc' },
         },
         createdBy: {
@@ -82,6 +85,7 @@ export async function GET(request, { params }) {
       accountsPayable: purchaseOrder.accountsPayable.map(ap => ({
         ...ap,
         amount: Number(ap.amount),
+        paymentMethod: ap.paymentMethod ? { id: ap.paymentMethod.id, name: ap.paymentMethod.name } : null,
       })),
     }
 

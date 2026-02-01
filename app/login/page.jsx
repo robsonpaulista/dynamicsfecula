@@ -33,7 +33,9 @@ export default function LoginPage() {
         title: 'Login realizado com sucesso!',
         description: 'Redirecionando...',
       })
-      router.push('/dashboard')
+      // Redirecionamento completo evita race: layout do dashboard já vê user no localStorage
+      window.location.href = '/dashboard'
+      return
     } catch (error) {
       toast({
         title: 'Erro ao fazer login',

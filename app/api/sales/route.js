@@ -34,11 +34,22 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const status = searchParams.get('status')
     const customerId = searchParams.get('customerId')
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
     const skip = (page - 1) * limit
 
     const where = {}
     if (status) where.status = status
     if (customerId) where.customerId = customerId
+    if (from || to) {
+      where.saleDate = {}
+      if (from) where.saleDate.gte = new Date(from)
+      if (to) {
+        const toDate = new Date(to)
+        toDate.setHours(23, 59, 59, 999)
+        where.saleDate.lte = toDate
+      }
+    }
 
     const [orders, total] = await Promise.all([
       prisma.salesOrder.findMany({
@@ -170,6 +181,9 @@ export async function POST(request) {
         total,
         isBonificacao: data.isBonificacao || false,
         status: 'DRAFT',
+        installmentsJson: data.installments && data.installments.length > 0
+          ? { categoryId: data.categoryId || null, installments: data.installments }
+          : null,
         createdById: user.id,
         items: {
           create: salesItems,
@@ -290,12 +304,10 @@ export async function POST(request) {
         })
       }
     } else {
-      // Criar contas a receber se parcelas foram informadas (venda normal)
+      // Venda normal: apenas validar parcelas se informadas (contas a receber serão criadas na confirmação de entrega)
       if (data.installments && data.installments.length > 0) {
         const orderTotal = Number(total)
         const totalInstallments = data.installments.reduce((sum, inst) => sum + inst.amount, 0)
-
-        // Validar se a soma das parcelas é igual ao total do pedido (tolerância de 0.01 para arredondamentos)
         const difference = Math.abs(totalInstallments - orderTotal)
         if (difference > 0.01) {
           if (totalInstallments > orderTotal) {
@@ -321,81 +333,6 @@ export async function POST(request) {
               { status: 400 }
             )
           }
-        }
-
-        const baseDescription = `Pedido de venda #${order.id.slice(0, 8)}`
-
-        for (let i = 0; i < data.installments.length; i++) {
-          const installment = data.installments[i]
-          const installmentNumber = data.installments.length > 1 ? ` - Parcela ${i + 1}/${data.installments.length}` : ''
-          
-          // Validar paymentMethodId se fornecido
-          let paymentMethodId = null
-          if (installment.paymentMethodId && installment.paymentMethodId.trim() !== '') {
-            const paymentMethod = await prisma.paymentMethod.findUnique({
-              where: { id: installment.paymentMethodId },
-            })
-            if (!paymentMethod) {
-              return NextResponse.json(
-                { 
-                  success: false, 
-                  error: { 
-                    message: `Forma de pagamento não encontrada para a parcela ${i + 1}`, 
-                    code: 'NOT_FOUND' 
-                  } 
-                },
-                { status: 404 }
-              )
-            }
-            paymentMethodId = installment.paymentMethodId
-          }
-
-          // Validar categoryId se fornecido
-          let categoryId = null
-          if (data.categoryId && data.categoryId.trim() !== '') {
-            const category = await prisma.category.findUnique({
-              where: { id: data.categoryId },
-            })
-            if (!category) {
-              return NextResponse.json(
-                { 
-                  success: false, 
-                  error: { 
-                    message: 'Categoria não encontrada', 
-                    code: 'NOT_FOUND' 
-                  } 
-                },
-                { status: 404 }
-              )
-            }
-            categoryId = data.categoryId
-          }
-          
-          // Calcular prazo em dias se dueDate e saleDate estiverem disponíveis
-          let paymentDays = null
-          if (installment.dueDate && data.saleDate) {
-            const saleDate = new Date(data.saleDate)
-            const dueDate = new Date(installment.dueDate)
-            const diffTime = dueDate.getTime() - saleDate.getTime()
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-            if (diffDays > 0) {
-              paymentDays = diffDays
-            }
-          }
-
-          await prisma.accountsReceivable.create({
-            data: {
-              customerId: data.customerId,
-              salesOrderId: order.id,
-              description: installment.description || `${baseDescription}${installmentNumber}`,
-              dueDate: new Date(installment.dueDate),
-              amount: new Decimal(installment.amount),
-              categoryId,
-              paymentMethodId,
-              paymentDays,
-              status: 'OPEN',
-            },
-          })
         }
       }
     }

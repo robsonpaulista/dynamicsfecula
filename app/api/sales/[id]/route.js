@@ -33,6 +33,11 @@ export async function GET(request, { params }) {
           },
         },
         accountsReceivable: {
+          include: {
+            paymentMethod: {
+              select: { id: true, name: true },
+            },
+          },
           orderBy: { dueDate: 'asc' },
         },
         returns: {
@@ -90,6 +95,7 @@ export async function GET(request, { params }) {
       accountsReceivable: salesOrder.accountsReceivable.map(ar => ({
         ...ar,
         amount: Number(ar.amount),
+        paymentMethod: ar.paymentMethod ? { id: ar.paymentMethod.id, name: ar.paymentMethod.name } : null,
       })),
       returns: salesOrder.returns.map(ret => ({
         ...ret,
@@ -166,6 +172,15 @@ export async function PATCH(request, { params }) {
         { status: 400 }
       )
     }
+
+    // Cancelar contas a receber em aberto vinculadas ao pedido
+    await prisma.accountsReceivable.updateMany({
+      where: {
+        salesOrderId: params.id,
+        status: 'OPEN',
+      },
+      data: { status: 'CANCELED' },
+    })
 
     const updated = await prisma.salesOrder.update({
       where: { id: params.id },

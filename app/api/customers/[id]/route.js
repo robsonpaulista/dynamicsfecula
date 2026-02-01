@@ -24,6 +24,24 @@ export async function GET(request, { params }) {
 
     const customer = await prisma.customer.findUnique({
       where: { id: params.id },
+      include: {
+        salesOrders: {
+          orderBy: { saleDate: 'desc' },
+          include: {
+            items: {
+              include: {
+                product: { select: { id: true, sku: true, name: true, unit: true } },
+              },
+            },
+          },
+        },
+        accountsReceivable: {
+          orderBy: { dueDate: 'asc' },
+          include: {
+            paymentMethod: { select: { id: true, name: true } },
+          },
+        },
+      },
     })
 
     if (!customer) {
@@ -33,9 +51,28 @@ export async function GET(request, { params }) {
       )
     }
 
+    const serialized = {
+      ...customer,
+      salesOrders: customer.salesOrders.map((o) => ({
+        ...o,
+        total: Number(o.total),
+        items: o.items.map((i) => ({
+          ...i,
+          quantity: Number(i.quantity),
+          unitPrice: Number(i.unitPrice),
+          total: Number(i.total),
+        })),
+      })),
+      accountsReceivable: customer.accountsReceivable.map((ar) => ({
+        ...ar,
+        amount: Number(ar.amount),
+        paymentMethod: ar.paymentMethod ? { id: ar.paymentMethod.id, name: ar.paymentMethod.name } : null,
+      })),
+    }
+
     return NextResponse.json({
       success: true,
-      data: customer,
+      data: serialized,
     })
   } catch (error) {
     if (error instanceof NotFoundError) {
