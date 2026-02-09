@@ -6,11 +6,12 @@ import { authenticate, authorize } from '@/middleware/auth'
 
 const createAccountPayableSchema = z.object({
   description: z.string().min(1, 'Descrição é obrigatória'),
-  supplierId: z.string().optional(),
-  salesOrderId: z.string().optional(),
-  categoryId: z.string().optional(),
+  supplierId: z.string().optional().nullable(),
+  salesOrderId: z.string().optional().nullable(),
+  categoryId: z.string().optional().nullable(),
   dueDate: z.string().or(z.date()),
   amount: z.number().min(0.01, 'Valor deve ser maior que zero'),
+  receiptBase64: z.string().optional().nullable(),
 })
 
 export async function GET(request) {
@@ -81,19 +82,23 @@ export async function GET(request) {
 
     return NextResponse.json({
       success: true,
-      data: accounts.map(ap => ({
-        ...ap,
-        amount: Number(ap.amount),
-        salesOrder: ap.salesOrder ? {
-          ...ap.salesOrder,
-          total: Number(ap.salesOrder.total),
-        } : null,
-        paymentSources: ap.paymentSources?.map(ps => ({
-          ...ps,
-          amount: Number(ps.amount),
-          investor: ps.investor,
-        })) || [],
-      })),
+      data: accounts.map(ap => {
+        const { receiptBase64, ...rest } = ap
+        return {
+          ...rest,
+          amount: Number(ap.amount),
+          hasReceipt: !!receiptBase64,
+          salesOrder: ap.salesOrder ? {
+            ...ap.salesOrder,
+            total: Number(ap.salesOrder.total),
+          } : null,
+          paymentSources: ap.paymentSources?.map(ps => ({
+            ...ps,
+            amount: Number(ps.amount),
+            investor: ps.investor,
+          })) || [],
+        }
+      }),
       pagination: {
         page,
         limit,
@@ -189,6 +194,7 @@ export async function POST(request) {
         dueDate: new Date(data.dueDate),
         amount: new Decimal(data.amount),
         status: 'OPEN',
+        receiptBase64: data.receiptBase64 || null,
       },
       include: {
         supplier: {

@@ -19,6 +19,7 @@ export default function ProductsPage() {
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [historyDateFrom, setHistoryDateFrom] = useState('')
   const [historyDateTo, setHistoryDateTo] = useState('')
+  const [reconciling, setReconciling] = useState(false)
 
   const loadProducts = async () => {
     try {
@@ -75,6 +76,20 @@ export default function ProductsPage() {
     setSelectedProductDetails(null)
   }
 
+  const handleReconcileBalance = async () => {
+    if (!selectedProduct?.id) return
+    setReconciling(true)
+    try {
+      await api.post(`/products/${selectedProduct.id}/reconcile`)
+      await loadProductDetails(selectedProduct)
+      await loadProducts()
+    } catch (error) {
+      console.error('Erro ao corrigir saldo:', error)
+    } finally {
+      setReconciling(false)
+    }
+  }
+
   const getMovementTypeLabel = (type) => {
     const labels = { IN: 'Entrada', OUT: 'Saída', ADJUST: 'Ajuste' }
     return labels[type] || type
@@ -91,7 +106,8 @@ export default function ProductsPage() {
       return `Compra - ${movement.reference.supplier.name}`
     }
     if (movement.reference.type === 'SALE' && movement.reference.customer) {
-      return `Venda - ${movement.reference.customer.name}`
+      const cancelado = movement.reference.isCanceled ? ' (Cancelado)' : ''
+      return `Venda - ${movement.reference.customer.name}${cancelado}`
     }
     return movement.note || movement.referenceType || '-'
   }
@@ -107,7 +123,8 @@ export default function ProductsPage() {
       MANUAL: 'Ajuste',
     }
     const typeLabel = prefix[movement.referenceType] || movement.referenceType || 'Ref'
-    return `${typeLabel} #${shortId}`
+    const cancelado = movement.reference?.type === 'SALE' && movement.reference?.isCanceled ? ' (Cancelado)' : ''
+    return `${typeLabel} #${shortId}${cancelado}`
   }
 
   return (
@@ -309,46 +326,60 @@ export default function ProductsPage() {
                     <tbody>
                       {(!selectedProductDetails?.stockMovements || selectedProductDetails.stockMovements.length === 0) ? (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center text-gray-500">
+                          <td colSpan={7} className="py-8 text-center text-gray-500">
                             Nenhuma movimentação no período
                           </td>
                         </tr>
                       ) : (
-                        selectedProductDetails.stockMovements.map((mov) => (
-                          <tr key={mov.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                            <td className="py-2 px-4 text-gray-600">{formatDate(mov.createdAt)}</td>
-                            <td className="py-2 px-4 font-mono text-xs text-gray-700" title={mov.referenceId}>
-                              {getReferenceIdLabel(mov)}
-                            </td>
-                            <td className="py-2 px-4">
-                              <span
-                                className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getMovementTypeColor(
-                                  mov.type
-                                )}`}
-                              >
-                                {getMovementTypeLabel(mov.type)}
-                              </span>
-                            </td>
-                            <td className="py-2 px-4 text-right font-semibold">
-                              <span
-                                className={
-                                  mov.type === 'OUT' || (mov.type === 'ADJUST' && Number(mov.quantity) < 0)
-                                    ? 'text-red-700'
-                                    : 'text-green-700'
-                                }
-                              >
-                                {mov.type === 'OUT' || Number(mov.quantity) < 0 ? '-' : '+'}
-                                {Math.abs(Number(mov.quantity))} {selectedProduct.unit}
-                              </span>
-                            </td>
-                            <td className="py-2 px-4 text-right text-gray-600">
-                              {(mov.displayUnitPrice ?? mov.unitCost) != null ? formatCurrency(Number(mov.displayUnitPrice ?? mov.unitCost)) : '-'}
-                            </td>
-                            <td className="py-2 px-4 text-gray-600 max-w-[200px] truncate" title={getReferenceLabel(mov)}>
-                              {getReferenceLabel(mov)}
-                            </td>
-                          </tr>
-                        ))
+                        (() => {
+                          const movs = [...selectedProductDetails.stockMovements].sort(
+                            (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+                          )
+                          let saldoCorrido = 0
+                          return movs.map((mov) => {
+                            const q = Number(mov.quantity)
+                            const efeito = mov.type === 'IN' || (mov.type === 'ADJUST' && q > 0) ? q : -(Math.abs(q))
+                            saldoCorrido += efeito
+                            return (
+                              <tr key={mov.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                                <td className="py-2 px-4 text-gray-600">{formatDate(mov.createdAt)}</td>
+                                <td className="py-2 px-4 font-mono text-xs text-gray-700" title={mov.referenceId}>
+                                  {getReferenceIdLabel(mov)}
+                                </td>
+                                <td className="py-2 px-4">
+                                  <span
+                                    className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getMovementTypeColor(
+                                      mov.type
+                                    )}`}
+                                  >
+                                    {getMovementTypeLabel(mov.type)}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-4 text-right font-semibold">
+                                  <span
+                                    className={
+                                      mov.type === 'OUT' || (mov.type === 'ADJUST' && Number(mov.quantity) < 0)
+                                        ? 'text-red-700'
+                                        : 'text-green-700'
+                                    }
+                                  >
+                                    {mov.type === 'OUT' || Number(mov.quantity) < 0 ? '-' : '+'}
+                                    {Math.abs(Number(mov.quantity))} {selectedProduct.unit}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-4 text-right font-bold text-[#00B299] tabular-nums">
+                                  {saldoCorrido.toLocaleString('pt-BR')} {selectedProduct.unit}
+                                </td>
+                                <td className="py-2 px-4 text-right text-gray-600">
+                                  {(mov.displayUnitPrice ?? mov.unitCost) != null ? formatCurrency(Number(mov.displayUnitPrice ?? mov.unitCost)) : '-'}
+                                </td>
+                                <td className="py-2 px-4 text-gray-600 max-w-[200px] truncate" title={getReferenceLabel(mov)}>
+                                  {getReferenceLabel(mov)}
+                                </td>
+                              </tr>
+                            )
+                          })
+                        })()
                       )}
                     </tbody>
                   </table>
@@ -357,34 +388,73 @@ export default function ProductsPage() {
 
               {/* Totalizador do histórico */}
               {!loadingDetails && selectedProductDetails?.stockMovements?.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap items-center gap-4 text-sm">
-                  <span className="font-semibold text-gray-700">
-                    Entradas: <span className="text-green-700 font-bold">
-                      +{selectedProductDetails.stockMovements
-                        .filter((m) => m.type === 'IN' || (m.type === 'ADJUST' && Number(m.quantity) > 0))
-                        .reduce((s, m) => s + Math.abs(Number(m.quantity)), 0)}{' '}
-                      {selectedProduct.unit}
+                <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                  <div className="flex flex-wrap items-center gap-4 text-sm">
+                    <span className="font-semibold text-gray-700">
+                      Entradas: <span className="text-green-700 font-bold">
+                        +{selectedProductDetails.stockMovements
+                          .filter((m) => m.type === 'IN' || (m.type === 'ADJUST' && Number(m.quantity) > 0))
+                          .reduce((s, m) => s + Math.abs(Number(m.quantity)), 0)}{' '}
+                        {selectedProduct.unit}
+                      </span>
                     </span>
-                  </span>
-                  <span className="font-semibold text-gray-700">
-                    Saídas: <span className="text-red-700 font-bold">
-                      -{selectedProductDetails.stockMovements
-                        .filter((m) => m.type === 'OUT' || (m.type === 'ADJUST' && Number(m.quantity) < 0))
-                        .reduce((s, m) => s + Math.abs(Number(m.quantity)), 0)}{' '}
-                      {selectedProduct.unit}
+                    <span className="font-semibold text-gray-700">
+                      Saídas: <span className="text-red-700 font-bold">
+                        -{selectedProductDetails.stockMovements
+                          .filter((m) => m.type === 'OUT' || (m.type === 'ADJUST' && Number(m.quantity) < 0))
+                          .reduce((s, m) => s + Math.abs(Number(m.quantity)), 0)}{' '}
+                        {selectedProduct.unit}
+                      </span>
                     </span>
-                  </span>
-                  <span className="font-semibold text-gray-700">
-                    Saldo do período: <span className="text-[#00B299] font-bold">
-                      {selectedProductDetails.stockMovements.reduce((s, m) => {
-                        const q = Number(m.quantity)
-                        if (m.type === 'IN' || (m.type === 'ADJUST' && q > 0)) return s + q
-                        if (m.type === 'OUT' || (m.type === 'ADJUST' && q < 0)) return s - Math.abs(q)
-                        return s
-                      }, 0)}{' '}
-                      {selectedProduct.unit}
+                    <span className="font-semibold text-gray-700">
+                      Soma das movimentações listadas: <span className="text-[#00B299] font-bold">
+                        {selectedProductDetails.stockMovements.reduce((s, m) => {
+                          const q = Number(m.quantity)
+                          if (m.type === 'IN' || (m.type === 'ADJUST' && q > 0)) return s + q
+                          if (m.type === 'OUT' || (m.type === 'ADJUST' && q < 0)) return s - Math.abs(q)
+                          return s
+                        }, 0)}{' '}
+                        {selectedProduct.unit}
+                      </span>
                     </span>
-                  </span>
+                    <span className="font-semibold text-gray-700">
+                      Saldo atual (estoque real): <span className="text-[#00B299] font-bold">
+                        {selectedProductDetails.stockBalance?.quantity != null
+                          ? `${Number(selectedProductDetails.stockBalance.quantity)} ${selectedProduct.unit}`
+                          : '-'}
+                      </span>
+                    </span>
+                  </div>
+                  {selectedProductDetails.stockBalance?.quantity != null && (() => {
+                    const saldoPeriodo = selectedProductDetails.stockMovements.reduce((s, m) => {
+                      const q = Number(m.quantity)
+                      if (m.type === 'IN' || (m.type === 'ADJUST' && q > 0)) return s + q
+                      if (m.type === 'OUT' || (m.type === 'ADJUST' && q < 0)) return s - Math.abs(q)
+                      return s
+                    }, 0)
+                    const saldoAtual = Number(selectedProductDetails.stockBalance.quantity)
+                    const dif = saldoAtual - saldoPeriodo
+                    if (Math.abs(dif) > 0.001) {
+                      return (
+                        <div className="space-y-2">
+                          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                            A soma das movimentações listadas ({saldoPeriodo} {selectedProduct.unit}) difere do saldo atual ({saldoAtual} {selectedProduct.unit}). Isso pode ocorrer por <strong>filtro por data</strong>, lista limitada a 500 registros ou inconsistência nos dados.
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-amber-500 text-amber-700 hover:bg-amber-50 inline-flex items-center gap-2"
+                            onClick={handleReconcileBalance}
+                            disabled={reconciling}
+                          >
+                            {reconciling && <Loader2 className="h-4 w-4 animate-spin" />}
+                            Corrigir saldo com base em todas as movimentações
+                          </Button>
+                        </div>
+                      )
+                    }
+                    return null
+                  })()}
                 </div>
               )}
             </CardContent>

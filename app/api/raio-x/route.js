@@ -140,25 +140,52 @@ export async function GET(request) {
         custoVendas += Number(item.quantity) * Number(item.product?.costPrice ?? 0)
       })
     })
-    const lucro = totalVendido - custoVendas
-    const margemPercent = totalVendido > 0 ? (lucro / totalVendido) * 100 : 0
 
     const statusLabel = (s) => {
       const map = { DRAFT: 'Digitado', CONFIRMED: 'Confirmado', DELIVERED: 'Entregue', CANCELED: 'Cancelado' }
       return map[s] || s
     }
 
+    // Despesas marcadas como custo de entrega (rateio por quantidade total entregue)
+    const deliveryExpensesWhere = { status: 'PAID', isDeliveryCost: true }
+    if (hasPeriod && (startDate || endDate)) {
+      deliveryExpensesWhere.paidAt = {}
+      if (startDate) deliveryExpensesWhere.paidAt.gte = startDate
+      if (endDate) {
+        const endOfDay = new Date(endDate)
+        endOfDay.setHours(23, 59, 59, 999)
+        deliveryExpensesWhere.paidAt.lte = endOfDay
+      }
+    }
+    const deliveryExpensesList = await prisma.accountsPayable.findMany({
+      where: deliveryExpensesWhere,
+      select: { amount: true },
+    })
+    const totalDeliveryExpenses = deliveryExpensesList.reduce((s, ap) => s + Number(ap.amount), 0)
+
+    const totalQuantityDelivered = delivered.reduce((s, so) => {
+      return s + so.items.reduce((q, it) => q + Number(it.quantity), 0)
+    }, 0)
+    const unitCostDelivery = totalQuantityDelivered > 0 ? totalDeliveryExpenses / totalQuantityDelivered : 0
+    const custoEntregaAplicado = unitCostDelivery * totalQuantityDelivered
+    const lucro = totalVendido - (custoVendas + custoEntregaAplicado)
+    const margemPercent = totalVendido > 0 ? (lucro / totalVendido) * 100 : 0
+
     const pedidosVenda = salesOrders.map((so) => {
       const custoPed = so.items.reduce((s, it) => s + Number(it.quantity) * Number(it.product?.costPrice ?? 0), 0)
+      const quantityInOrder = so.items.reduce((q, it) => q + Number(it.quantity), 0)
+      const custoEntregas = unitCostDelivery * quantityInOrder
       const totalPed = Number(so.total)
+      const custoTotal = custoPed + custoEntregas
       return {
         id: so.id,
         cliente: so.customer?.name || '-',
         data: so.saleDate,
         total: totalPed,
         custo: custoPed,
-        lucro: totalPed - custoPed,
-        margem: totalPed > 0 ? ((totalPed - custoPed) / totalPed) * 100 : 0,
+        custoEntregas,
+        lucro: totalPed - custoTotal,
+        margem: totalPed > 0 ? ((totalPed - custoTotal) / totalPed) * 100 : 0,
         status: so.status,
         statusLabel: statusLabel(so.status),
       }
@@ -272,6 +299,7 @@ export async function GET(request) {
           qtdePedidos,
           totalVendido,
           custo: custoVendas,
+          custoEntregas: custoEntregaAplicado,
           lucro,
           margemPercent,
           pedidos: pedidosVenda,

@@ -424,12 +424,21 @@ export default function SalesPage() {
           {/* Totalizador */}
           {!loading && filteredAndSortedSales.length > 0 && (
             <div className="border-t border-gray-200 bg-gray-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-4 text-sm">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
                 <span className="font-semibold text-gray-700">
                   Qtde de pedidos: <span className="text-[#00B299]">{filteredAndSortedSales.length}</span>
                   {(filterPedido || filterCliente || filterTotal) && sales.length !== filteredAndSortedSales.length && (
                     <span className="text-gray-500 ml-1">(de {sales.length})</span>
                   )}
+                </span>
+                <span className="font-semibold text-gray-700">
+                  Qtde entregue: <span className="text-[#00B299]">{filteredAndSortedSales.filter((s) => s.status === 'DELIVERED').length}</span>
+                </span>
+                <span className="font-semibold text-gray-700">
+                  Qtde cancelada: <span className="text-red-600">{filteredAndSortedSales.filter((s) => s.status === 'CANCELED').length}</span>
+                </span>
+                <span className="font-semibold text-gray-700">
+                  Qtde a entregar: <span className="text-amber-600">{filteredAndSortedSales.filter((s) => s.status === 'DRAFT' || s.status === 'CONFIRMED').length}</span>
                 </span>
                 <span className="font-semibold text-gray-700">
                   Total vendido: <span className="text-[#00B299] text-lg">{formatCurrency(filteredAndSortedSales.reduce((sum, s) => sum + Number(s.total), 0))}</span>

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { DollarSign, TrendingUp, TrendingDown, RefreshCw, CheckCircle, Loader2, Plus, Trash2, X } from 'lucide-react'
+import { DollarSign, TrendingUp, TrendingDown, RefreshCw, CheckCircle, Loader2, Plus, Trash2, X, Pencil, Undo2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 const AP_STATUS_FILTERS = [
@@ -39,6 +39,11 @@ export default function FinancePage() {
   const [showReceiveModal, setShowReceiveModal] = useState(false)
   const [selectedARAccount, setSelectedARAccount] = useState(null)
   const [receivedAmount, setReceivedAmount] = useState('')
+  const [deletingApId, setDeletingApId] = useState(null)
+  const [selectedDeliveryIds, setSelectedDeliveryIds] = useState(new Set())
+  const [bulkUpdatingDelivery, setBulkUpdatingDelivery] = useState(false)
+  const [reversingApId, setReversingApId] = useState(null)
+  const [reversingArId, setReversingArId] = useState(null)
   const { toast } = useToast()
 
   const loadFinance = useCallback(async () => {
@@ -104,10 +109,60 @@ export default function FinancePage() {
     setShowPaymentModal(true)
   }
 
+  const handleDeleteAp = async (ap) => {
+    if (ap.status !== 'OPEN') return
+    if (!confirm('Deseja realmente excluir esta despesa? Esta ação não pode ser desfeita.')) return
+    setDeletingApId(ap.id)
+    try {
+      await api.delete(`/finance/ap/${ap.id}`)
+      toast({ title: 'Despesa excluída', description: 'A despesa foi excluída com sucesso.' })
+      loadFinance()
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: error.response?.data?.error?.message || 'Erro ao excluir despesa',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeletingApId(null)
+    }
+  }
+
   const closePaymentModal = () => {
     setShowPaymentModal(false)
     setSelectedAccount(null)
     setPaymentSources([{ investorId: '', amount: '' }])
+  }
+
+  const toggleSelectDelivery = (ap) => {
+    if (ap.status !== 'PAID') return
+    setSelectedDeliveryIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(ap.id)) next.delete(ap.id)
+      else next.add(ap.id)
+      return next
+    })
+  }
+
+  const handleBulkDeliveryUpdate = async (markAs) => {
+    if (selectedDeliveryIds.size === 0) return
+    setBulkUpdatingDelivery(true)
+    try {
+      await api.post('/finance/ap/delivery-cost/bulk', {
+        ids: Array.from(selectedDeliveryIds),
+        isDeliveryCost: markAs,
+      })
+      toast({
+        title: markAs ? 'Despesas incluídas no rateio' : 'Despesas removidas do rateio',
+        description: 'O custo de entregas no Raio X será recalculado a partir dessas despesas.',
+      })
+      setSelectedDeliveryIds(new Set())
+      loadFinance()
+    } catch (err) {
+      toast({ title: 'Erro', description: err.response?.data?.error?.message || 'Erro ao atualizar rateio', variant: 'destructive' })
+    } finally {
+      setBulkUpdatingDelivery(false)
+    }
   }
 
   const addPaymentSource = () => {
@@ -176,6 +231,44 @@ export default function FinancePage() {
     setShowReceiveModal(false)
     setSelectedARAccount(null)
     setReceivedAmount('')
+  }
+
+  const handleReverseAp = async (ap) => {
+    if (ap.status !== 'PAID') return
+    if (!confirm(`Deseja estornar a baixa da despesa "${ap.description}"? A conta voltará para status Aberta, fontes pagadoras e transações de caixa serão removidas.`)) return
+    setReversingApId(ap.id)
+    try {
+      const response = await api.post(`/finance/ap/${ap.id}/reverse`)
+      toast({ title: 'Estorno realizado', description: response.data.message || 'A baixa foi estornada com sucesso.' })
+      loadFinance()
+    } catch (error) {
+      toast({
+        title: 'Erro ao estornar',
+        description: error.response?.data?.error?.message || 'Erro ao estornar a baixa',
+        variant: 'destructive',
+      })
+    } finally {
+      setReversingApId(null)
+    }
+  }
+
+  const handleReverseAr = async (ar) => {
+    if (ar.status !== 'RECEIVED') return
+    if (!confirm(`Deseja estornar a baixa da receita "${ar.description}"? A conta voltará para status Aberta, transações de caixa serão removidas e o valor será restaurado.`)) return
+    setReversingArId(ar.id)
+    try {
+      const response = await api.post(`/finance/ar/${ar.id}/reverse`)
+      toast({ title: 'Estorno realizado', description: response.data.message || 'A baixa foi estornada com sucesso.' })
+      loadFinance()
+    } catch (error) {
+      toast({
+        title: 'Erro ao estornar',
+        description: error.response?.data?.error?.message || 'Erro ao estornar a baixa',
+        variant: 'destructive',
+      })
+    } finally {
+      setReversingArId(null)
+    }
   }
 
   const handleReceiveAccount = async () => {
@@ -333,49 +426,111 @@ export default function FinancePage() {
             {/* Contas a Pagar */}
             {activeTab === 'ap' && (
               <div className="p-4">
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-gray-700">Filtrar:</span>
-                  <select
-                    value={apStatusFilter}
-                    onChange={(e) => setApStatusFilter(e.target.value)}
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF8C00] bg-white"
-                  >
-                    {AP_STATUS_FILTERS.map((f) => (
-                      <option key={f.value || 'all'} value={f.value}>
-                        {f.label}
-                      </option>
-                    ))}
-                  </select>
+                <div className="mb-4 flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">Filtrar:</span>
+                    <select
+                      value={apStatusFilter}
+                      onChange={(e) => setApStatusFilter(e.target.value)}
+                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF8C00] bg-white"
+                    >
+                      {AP_STATUS_FILTERS.map((f) => (
+                        <option key={f.value || 'all'} value={f.value}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {selectedDeliveryIds.size > 0 && (
+                    <span className="text-xs text-gray-600">
+                      {selectedDeliveryIds.size} despesa(s) selecionada(s) para rateio
+                    </span>
+                  )}
+                  <div className="flex flex-wrap gap-2 ml-auto">
+                    <Button
+                      size="sm"
+                      disabled={selectedDeliveryIds.size === 0 || bulkUpdatingDelivery}
+                      className="bg-[#00B299] hover:bg-[#00B299]/90 text-white"
+                      onClick={() => handleBulkDeliveryUpdate(true)}
+                    >
+                      {bulkUpdatingDelivery ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                      Incluir no rateio
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={selectedDeliveryIds.size === 0 || bulkUpdatingDelivery}
+                      onClick={() => handleBulkDeliveryUpdate(false)}
+                    >
+                      {bulkUpdatingDelivery ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                      Remover do rateio
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={selectedDeliveryIds.size === 0 || bulkUpdatingDelivery}
+                      onClick={() => setSelectedDeliveryIds(new Set())}
+                    >
+                      Limpar seleção
+                    </Button>
+                  </div>
                 </div>
+                {(() => {
+                  const deliveryCostAps = accountsPayable.filter((ap) => ap.status === 'PAID' && ap.isDeliveryCost)
+                  const totalDelivery = deliveryCostAps.reduce((s, ap) => s + Number(ap.amount), 0)
+                  if (deliveryCostAps.length > 0) {
+                    return (
+                      <p className="text-xs text-gray-600 mb-3 p-2 bg-[#00B299]/5 rounded border border-[#00B299]/20">
+                        <strong>Custo de entregas (Raio X):</strong> {deliveryCostAps.length} despesa(s) selecionada(s) — total {formatCurrency(totalDelivery)}.
+                        Rateio: valor total ÷ quantidade total entregue × quantidade do pedido.
+                      </p>
+                    )
+                  }
+                  return null
+                })()}
                 <div className="overflow-x-auto max-h-[450px] overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 z-10 bg-gray-50">
                       <tr className="border-b border-gray-200">
+                        <th className="text-center py-2 px-4 font-medium text-gray-700 w-12">Sel.</th>
                         <th className="text-left py-2 px-4 font-medium text-gray-700">Descrição</th>
                         <th className="text-left py-2 px-4 font-medium text-gray-700">Fornecedor / Venda</th>
                         <th className="text-left py-2 px-4 font-medium text-gray-700">Vencimento</th>
                         <th className="text-right py-2 px-4 font-medium text-gray-700">Valor</th>
                         <th className="text-left py-2 px-4 font-medium text-gray-700">Status</th>
                         <th className="text-left py-2 px-4 font-medium text-gray-700">Forma pagamento</th>
-                        <th className="text-right py-2 px-4 font-medium text-gray-700 w-24">Ações</th>
+                        <th className="text-center py-2 px-4 font-medium text-gray-700 w-40">Custo entregas</th>
+                        <th className="text-right py-2 px-4 font-medium text-gray-700 min-w-[220px]">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
                       {loading ? (
                         <tr>
-                          <td colSpan={7} className="py-12 text-center text-gray-500">
+                          <td colSpan={9} className="py-12 text-center text-gray-500">
                             Carregando...
                           </td>
                         </tr>
                       ) : accountsPayable.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-12 text-center text-gray-500">
+                          <td colSpan={9} className="py-12 text-center text-gray-500">
                             Nenhuma conta a pagar
                           </td>
                         </tr>
                       ) : (
                         accountsPayable.map((ap) => (
                           <tr key={ap.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                            <td className="py-2 px-4 text-center">
+                              {ap.status === 'PAID' ? (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedDeliveryIds.has(ap.id)}
+                                  onChange={() => toggleSelectDelivery(ap)}
+                                  className="rounded border-gray-300 text-[#00B299] focus:ring-[#00B299]"
+                                />
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
                             <td className="py-2 px-4 text-gray-900">{ap.description}</td>
                             <td className="py-2 px-4 text-gray-600">
                               {ap.supplier?.name || (ap.salesOrder && `Venda #${ap.salesOrder.id.slice(0, 8)}`) || '-'}
@@ -398,24 +553,94 @@ export default function FinancePage() {
                                 ? ap.paymentSources.map((ps, i) => ps.investor?.name || 'Caixa').join(', ')
                                 : ap.paymentMethod?.name || '-'}
                             </td>
-                            <td className="py-2 px-4 text-right">
-                              {ap.status === 'OPEN' && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => openPaymentModal(ap)}
-                                  disabled={processingAccount === `ap-${ap.id}`}
-                                  className="bg-green-600 hover:bg-green-700 text-white h-8"
+                            <td className="py-2 px-4 text-center align-middle">
+                              {ap.status === 'PAID' ? (
+                                <span
+                                  className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold ${
+                                    ap.isDeliveryCost ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                                  }`}
                                 >
-                                  {processingAccount === `ap-${ap.id}` ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <CheckCircle className="h-4 w-4 mr-1" />
-                                      Baixar
-                                    </>
-                                  )}
-                                </Button>
+                                  {ap.isDeliveryCost ? 'No rateio' : 'Fora do rateio'}
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 text-xs">Disponível após pagamento</span>
                               )}
+                            </td>
+                            <td className="py-2 px-4 text-right align-middle">
+                              <div className="flex flex-nowrap items-center justify-end gap-2 min-w-[200px]">
+                                {ap.status === 'OPEN' && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => openPaymentModal(ap)}
+                                      disabled={processingAccount === `ap-${ap.id}`}
+                                      className="bg-green-600 hover:bg-green-700 text-white h-8 shrink-0"
+                                    >
+                                      {processingAccount === `ap-${ap.id}` ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <>
+                                          <CheckCircle className="h-4 w-4 mr-1" />
+                                          Baixar
+                                        </>
+                                      )}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      asChild
+                                      className="h-8 shrink-0"
+                                    >
+                                      <Link href={`/dashboard/finance/expenses/${ap.id}`}>
+                                        <Pencil className="h-4 w-4 mr-1" />
+                                        Editar
+                                      </Link>
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleDeleteAp(ap)}
+                                      disabled={deletingApId === ap.id}
+                                      className="h-8 text-red-600 border-red-200 hover:bg-red-50 shrink-0"
+                                    >
+                                      {deletingApId === ap.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <>
+                                          <Trash2 className="h-4 w-4 mr-1" />
+                                          Excluir
+                                        </>
+                                      )}
+                                    </Button>
+                                  </>
+                                )}
+                                {ap.status === 'PAID' && (
+                                  <>
+                                    <Button size="sm" variant="outline" asChild className="h-8 shrink-0">
+                                      <Link href={`/dashboard/finance/expenses/${ap.id}`}>
+                                        <Pencil className="h-4 w-4 mr-1" />
+                                        Ver
+                                      </Link>
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleReverseAp(ap)}
+                                      disabled={reversingApId === ap.id}
+                                      className="h-8 text-orange-600 border-orange-200 hover:bg-orange-50 shrink-0"
+                                    >
+                                      {reversingApId === ap.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <>
+                                          <Undo2 className="h-4 w-4 mr-1" />
+                                          Estornar
+                                        </>
+                                      )}
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -463,7 +688,7 @@ export default function FinancePage() {
                         <th className="text-right py-2 px-4 font-medium text-gray-700">Valor</th>
                         <th className="text-left py-2 px-4 font-medium text-gray-700">Status</th>
                         <th className="text-left py-2 px-4 font-medium text-gray-700">Forma pagamento</th>
-                        <th className="text-right py-2 px-4 font-medium text-gray-700 w-24">Ações</th>
+                        <th className="text-right py-2 px-4 font-medium text-gray-700 min-w-[180px]">Ações</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -499,23 +724,43 @@ export default function FinancePage() {
                             </td>
                             <td className="py-2 px-4 text-gray-600">{ar.paymentMethod?.name || '-'}</td>
                             <td className="py-2 px-4 text-right">
-                              {ar.status === 'OPEN' && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => openReceiveModal(ar)}
-                                  disabled={processingAccount === `ar-${ar.id}`}
-                                  className="bg-[#00B299] hover:bg-[#00B299]/90 text-white h-8"
-                                >
-                                  {processingAccount === `ar-${ar.id}` ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <CheckCircle className="h-4 w-4 mr-1" />
-                                      Baixar
-                                    </>
-                                  )}
-                                </Button>
-                              )}
+                              <div className="flex flex-nowrap items-center justify-end gap-2">
+                                {ar.status === 'OPEN' && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => openReceiveModal(ar)}
+                                    disabled={processingAccount === `ar-${ar.id}`}
+                                    className="bg-[#00B299] hover:bg-[#00B299]/90 text-white h-8 shrink-0"
+                                  >
+                                    {processingAccount === `ar-${ar.id}` ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <>
+                                        <CheckCircle className="h-4 w-4 mr-1" />
+                                        Baixar
+                                      </>
+                                    )}
+                                  </Button>
+                                )}
+                                {ar.status === 'RECEIVED' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleReverseAr(ar)}
+                                    disabled={reversingArId === ar.id}
+                                    className="h-8 text-orange-600 border-orange-200 hover:bg-orange-50 shrink-0"
+                                  >
+                                    {reversingArId === ar.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <>
+                                        <Undo2 className="h-4 w-4 mr-1" />
+                                        Estornar
+                                      </>
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))

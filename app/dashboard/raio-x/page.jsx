@@ -239,16 +239,26 @@ export default function RaioXPage() {
                     {(!c.pedidos || c.pedidos.length === 0) ? (
                       <tr><td colSpan={6} className="py-8 text-center text-gray-500">Nenhum pedido</td></tr>
                     ) : (
-                      c.pedidos.map((po) => (
-                        <tr key={po.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                          <td className="py-2 px-4 text-gray-900">#{po.id.slice(0, 8)}</td>
-                          <td className="py-2 px-4 text-gray-600">{po.fornecedor}</td>
-                          <td className="py-2 px-4 text-gray-600">{formatDate(po.data)}</td>
-                          <td className="py-2 px-4 text-right font-semibold text-blue-600">{formatCurrency(po.total)}</td>
-                          <td className="py-2 px-4 text-gray-600 text-xs">{po.fontePagadora || '-'}</td>
-                          <td className="py-2 px-4"><span className="px-2 py-0.5 rounded text-xs bg-green-100 text-green-800">{po.statusLabel || po.status}</span></td>
+                      <>
+                        {c.pedidos.map((po) => (
+                          <tr key={po.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                            <td className="py-2 px-4 text-gray-900">#{po.id.slice(0, 8)}</td>
+                            <td className="py-2 px-4 text-gray-600">{po.fornecedor}</td>
+                            <td className="py-2 px-4 text-gray-600">{formatDate(po.data)}</td>
+                            <td className="py-2 px-4 text-right font-semibold text-blue-600">{formatCurrency(po.total)}</td>
+                            <td className="py-2 px-4 text-gray-600 text-xs">{po.fontePagadora || '-'}</td>
+                            <td className="py-2 px-4"><span className="px-2 py-0.5 rounded text-xs bg-green-100 text-green-800">{po.statusLabel || po.status}</span></td>
+                          </tr>
+                        ))}
+                        <tr className="bg-blue-50/70 font-semibold border-t-2 border-blue-200">
+                          <td className="py-2 px-4 text-gray-700" colSpan={3}>Total</td>
+                          <td className="py-2 px-4 text-right text-blue-700">
+                            {formatCurrency((c.pedidos || []).reduce((s, po) => s + Number(po.total || 0), 0))}
+                          </td>
+                          <td className="py-2 px-4 text-gray-600 text-xs">({(c.pedidos || []).length} pedido(s))</td>
+                          <td className="py-2 px-4" />
                         </tr>
-                      ))
+                      </>
                     )}
                   </tbody>
                 </table>
@@ -286,16 +296,31 @@ export default function RaioXPage() {
                     {(!p.detalhes || p.detalhes.length === 0) ? (
                       <tr><td colSpan={6} className="py-8 text-center text-gray-500">Nenhum produto com movimentação</td></tr>
                     ) : (
-                      p.detalhes.map((prod) => (
-                        <tr key={prod.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                          <td className="py-2 px-4 text-gray-900 font-medium">{prod.sku}</td>
-                          <td className="py-2 px-4 text-gray-600">{prod.name}</td>
-                          <td className="py-2 px-4 text-right font-semibold text-purple-600">{prod.comprada}</td>
-                          <td className="py-2 px-4 text-right font-semibold text-purple-600">{prod.saidas}</td>
-                          <td className="py-2 px-4 text-right font-bold text-purple-700">{prod.saldo}</td>
-                          <td className="py-2 px-4 text-gray-600">{prod.unit}</td>
+                      <>
+                        {p.detalhes.map((prod) => (
+                          <tr key={prod.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                            <td className="py-2 px-4 text-gray-900 font-medium">{prod.sku}</td>
+                            <td className="py-2 px-4 text-gray-600">{prod.name}</td>
+                            <td className="py-2 px-4 text-right font-semibold text-purple-600">{prod.comprada}</td>
+                            <td className="py-2 px-4 text-right font-semibold text-purple-600">{prod.saidas}</td>
+                            <td className="py-2 px-4 text-right font-bold text-purple-700">{prod.saldo}</td>
+                            <td className="py-2 px-4 text-gray-600">{prod.unit}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-purple-50/70 font-semibold border-t-2 border-purple-200">
+                          <td className="py-2 px-4 text-gray-700" colSpan={2}>Total</td>
+                          <td className="py-2 px-4 text-right text-purple-700">
+                            {(p.detalhes || []).reduce((s, prod) => s + (parseFloat(prod.comprada) || 0), 0).toLocaleString('pt-BR')}
+                          </td>
+                          <td className="py-2 px-4 text-right text-purple-700">
+                            {(p.detalhes || []).reduce((s, prod) => s + (parseFloat(prod.saidas) || 0), 0).toLocaleString('pt-BR')}
+                          </td>
+                          <td className="py-2 px-4 text-right text-purple-700">
+                            {(p.detalhes || []).reduce((s, prod) => s + (parseFloat(prod.saldo) || 0), 0).toLocaleString('pt-BR')}
+                          </td>
+                          <td className="py-2 px-4 text-gray-600">({(p.detalhes || []).length} produto(s))</td>
                         </tr>
-                      ))
+                      </>
                     )}
                   </tbody>
                 </table>
@@ -317,7 +342,7 @@ export default function RaioXPage() {
               </p>
             </CardHeader>
             <CardContent className="p-4">
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 p-4 bg-gray-50 rounded-lg text-sm">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4 p-4 bg-gray-50 rounded-lg text-sm">
                 <div>
                   <p className="text-gray-600">Qtde pedidos</p>
                   <p className="font-bold text-gray-900">{v.qtdePedidos ?? 0}</p>
@@ -327,8 +352,12 @@ export default function RaioXPage() {
                   <p className="font-bold text-green-600 text-lg">{formatCurrency(v.totalVendido ?? 0)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-600">Custo</p>
+                  <p className="text-gray-600">Custo produtos</p>
                   <p className="font-semibold text-gray-900">{formatCurrency(v.custo ?? 0)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600">Custo entregas</p>
+                  <p className="font-semibold text-gray-900">{formatCurrency(v.custoEntregas ?? 0)}</p>
                 </div>
                 <div>
                   <p className="text-gray-600">Lucro</p>
@@ -349,34 +378,56 @@ export default function RaioXPage() {
                       <th className="text-left py-2 px-2 font-medium text-gray-700 w-24">Status</th>
                       <th className="text-right py-2 px-2 font-medium text-gray-700 whitespace-nowrap w-24">Total</th>
                       <th className="text-right py-2 px-2 font-medium text-gray-700 whitespace-nowrap w-24">Custo</th>
+                      <th className="text-right py-2 px-2 font-medium text-gray-700 whitespace-nowrap w-24">Custo entregas</th>
                       <th className="text-right py-2 px-2 font-medium text-gray-700 whitespace-nowrap w-24">Lucro</th>
                       <th className="text-right py-2 px-2 font-medium text-gray-700 whitespace-nowrap w-20">Margem</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(!v.pedidos || v.pedidos.length === 0) ? (
-                      <tr><td colSpan={8} className="py-8 text-center text-gray-500">Nenhum pedido</td></tr>
+                      <tr><td colSpan={9} className="py-8 text-center text-gray-500">Nenhum pedido</td></tr>
                     ) : (
-                      v.pedidos.map((pv) => (
-                        <tr key={pv.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                          <td className="py-2 px-2 text-gray-900 font-mono text-xs">#{pv.id.slice(0, 8)}</td>
-                          <td className="py-2 px-2 text-gray-600 truncate max-w-[140px]">{pv.cliente}</td>
-                          <td className="py-2 px-2 text-gray-600 text-xs">{formatDate(pv.data)}</td>
-                          <td className="py-2 px-2">
-                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                              pv.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
-                              pv.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-800' :
-                              pv.status === 'DRAFT' ? 'bg-gray-100 text-gray-800' : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              {pv.statusLabel || pv.status}
-                            </span>
-                          </td>
-                          <td className="py-2 px-2 text-right font-semibold text-green-600 whitespace-nowrap">{formatCurrency(pv.total)}</td>
-                          <td className="py-2 px-2 text-right text-gray-600 whitespace-nowrap">{formatCurrency(pv.custo)}</td>
-                          <td className="py-2 px-2 text-right font-semibold text-green-700 whitespace-nowrap">{formatCurrency(pv.lucro)}</td>
-                          <td className="py-2 px-2 text-right font-semibold text-green-700 whitespace-nowrap">{(pv.margem ?? 0).toFixed(1)}%</td>
-                        </tr>
-                      ))
+                      <>
+                        {v.pedidos.map((pv) => (
+                          <tr key={pv.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                            <td className="py-2 px-2 text-gray-900 font-mono text-xs">#{pv.id.slice(0, 8)}</td>
+                            <td className="py-2 px-2 text-gray-600 truncate max-w-[140px]">{pv.cliente}</td>
+                            <td className="py-2 px-2 text-gray-600 text-xs">{formatDate(pv.data)}</td>
+                            <td className="py-2 px-2">
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                pv.status === 'DELIVERED' ? 'bg-green-100 text-green-800' :
+                                pv.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-800' :
+                                pv.status === 'DRAFT' ? 'bg-gray-100 text-gray-800' : 'bg-gray-100 text-gray-600'
+                              }`}>
+                                {pv.statusLabel || pv.status}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 text-right font-semibold text-green-600 whitespace-nowrap">{formatCurrency(pv.total)}</td>
+                            <td className="py-2 px-2 text-right text-gray-600 whitespace-nowrap">{formatCurrency(pv.custo)}</td>
+                            <td className="py-2 px-2 text-right text-gray-600 whitespace-nowrap">{formatCurrency(pv.custoEntregas ?? 0)}</td>
+                            <td className="py-2 px-2 text-right font-semibold text-green-700 whitespace-nowrap">{formatCurrency(pv.lucro)}</td>
+                            <td className="py-2 px-2 text-right font-semibold text-green-700 whitespace-nowrap">{(pv.margem ?? 0).toFixed(1)}%</td>
+                          </tr>
+                        ))}
+                        {(() => {
+                          const pedidos = v.pedidos || []
+                          const sumTotal = pedidos.reduce((s, p) => s + Number(p.total || 0), 0)
+                          const sumCusto = pedidos.reduce((s, p) => s + Number(p.custo || 0), 0)
+                          const sumCustoEntregas = pedidos.reduce((s, p) => s + Number(p.custoEntregas || 0), 0)
+                          const sumLucro = pedidos.reduce((s, p) => s + Number(p.lucro || 0), 0)
+                          const margemTotal = sumTotal > 0 ? ((sumLucro / sumTotal) * 100) : 0
+                          return (
+                            <tr className="bg-green-50/70 font-semibold border-t-2 border-green-200">
+                              <td className="py-2 px-2 text-gray-700" colSpan={4}>Total ({pedidos.length} pedido(s))</td>
+                              <td className="py-2 px-2 text-right text-green-700 whitespace-nowrap">{formatCurrency(sumTotal)}</td>
+                              <td className="py-2 px-2 text-right text-gray-700 whitespace-nowrap">{formatCurrency(sumCusto)}</td>
+                              <td className="py-2 px-2 text-right text-gray-700 whitespace-nowrap">{formatCurrency(sumCustoEntregas)}</td>
+                              <td className="py-2 px-2 text-right text-green-700 whitespace-nowrap">{formatCurrency(sumLucro)}</td>
+                              <td className="py-2 px-2 text-right text-green-700 whitespace-nowrap">{margemTotal.toFixed(1)}%</td>
+                            </tr>
+                          )
+                        })()}
+                      </>
                     )}
                   </tbody>
                 </table>
@@ -440,14 +491,22 @@ export default function RaioXPage() {
                         {(!f.detalhesAPPagas || f.detalhesAPPagas.length === 0) ? (
                           <tr><td colSpan={4} className="py-6 text-center text-gray-500">Nenhuma conta paga</td></tr>
                         ) : (
-                          f.detalhesAPPagas.map((ap) => (
-                            <tr key={ap.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                              <td className="py-2 px-4 text-gray-900 truncate max-w-[120px]">{ap.descricao}</td>
-                              <td className="py-2 px-4 text-gray-600">{ap.fornecedor}</td>
-                              <td className="py-2 px-4 text-gray-600">{formatDate(ap.pagamento)}</td>
-                              <td className="py-2 px-4 text-right font-semibold text-green-700">{formatCurrency(ap.valor)}</td>
+                          <>
+                            {f.detalhesAPPagas.map((ap) => (
+                              <tr key={ap.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                                <td className="py-2 px-4 text-gray-900 truncate max-w-[120px]">{ap.descricao}</td>
+                                <td className="py-2 px-4 text-gray-600">{ap.fornecedor}</td>
+                                <td className="py-2 px-4 text-gray-600">{formatDate(ap.pagamento)}</td>
+                                <td className="py-2 px-4 text-right font-semibold text-green-700">{formatCurrency(ap.valor)}</td>
+                              </tr>
+                            ))}
+                            <tr className="bg-green-50/70 font-semibold border-t-2 border-green-200">
+                              <td className="py-2 px-4 text-gray-700" colSpan={3}>Total ({f.detalhesAPPagas.length} título(s))</td>
+                              <td className="py-2 px-4 text-right text-green-700">
+                                {formatCurrency(f.detalhesAPPagas.reduce((s, ap) => s + Number(ap.valor || 0), 0))}
+                              </td>
                             </tr>
-                          ))
+                          </>
                         )}
                       </tbody>
                     </table>
@@ -470,14 +529,22 @@ export default function RaioXPage() {
                         {(!f.detalhesAP || f.detalhesAP.length === 0) ? (
                           <tr><td colSpan={4} className="py-6 text-center text-gray-500">Nenhuma conta a pagar</td></tr>
                         ) : (
-                          f.detalhesAP.map((ap) => (
-                            <tr key={ap.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                              <td className="py-2 px-4 text-gray-900 truncate max-w-[120px]">{ap.descricao}</td>
-                              <td className="py-2 px-4 text-gray-600">{ap.fornecedor}</td>
-                              <td className="py-2 px-4 text-gray-600">{formatDate(ap.vencimento)}</td>
-                              <td className="py-2 px-4 text-right font-semibold text-[#FF8C00]">{formatCurrency(ap.valor)}</td>
+                          <>
+                            {f.detalhesAP.map((ap) => (
+                              <tr key={ap.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                                <td className="py-2 px-4 text-gray-900 truncate max-w-[120px]">{ap.descricao}</td>
+                                <td className="py-2 px-4 text-gray-600">{ap.fornecedor}</td>
+                                <td className="py-2 px-4 text-gray-600">{formatDate(ap.vencimento)}</td>
+                                <td className="py-2 px-4 text-right font-semibold text-[#FF8C00]">{formatCurrency(ap.valor)}</td>
+                              </tr>
+                            ))}
+                            <tr className="bg-amber-50/70 font-semibold border-t-2 border-amber-200">
+                              <td className="py-2 px-4 text-gray-700" colSpan={3}>Total ({f.detalhesAP.length} título(s))</td>
+                              <td className="py-2 px-4 text-right text-[#FF8C00]">
+                                {formatCurrency(f.detalhesAP.reduce((s, ap) => s + Number(ap.valor || 0), 0))}
+                              </td>
                             </tr>
-                          ))
+                          </>
                         )}
                       </tbody>
                     </table>
@@ -500,14 +567,22 @@ export default function RaioXPage() {
                         {(!f.detalhesARRecebidas || f.detalhesARRecebidas.length === 0) ? (
                           <tr><td colSpan={4} className="py-6 text-center text-gray-500">Nenhuma conta recebida</td></tr>
                         ) : (
-                          f.detalhesARRecebidas.map((ar) => (
-                            <tr key={ar.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                              <td className="py-2 px-4 text-gray-900 truncate max-w-[120px]">{ar.descricao}</td>
-                              <td className="py-2 px-4 text-gray-600">{ar.cliente}</td>
-                              <td className="py-2 px-4 text-gray-600">{formatDate(ar.recebimento)}</td>
-                              <td className="py-2 px-4 text-right font-semibold text-green-700">{formatCurrency(ar.valor)}</td>
+                          <>
+                            {f.detalhesARRecebidas.map((ar) => (
+                              <tr key={ar.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                                <td className="py-2 px-4 text-gray-900 truncate max-w-[120px]">{ar.descricao}</td>
+                                <td className="py-2 px-4 text-gray-600">{ar.cliente}</td>
+                                <td className="py-2 px-4 text-gray-600">{formatDate(ar.recebimento)}</td>
+                                <td className="py-2 px-4 text-right font-semibold text-green-700">{formatCurrency(ar.valor)}</td>
+                              </tr>
+                            ))}
+                            <tr className="bg-green-50/70 font-semibold border-t-2 border-green-200">
+                              <td className="py-2 px-4 text-gray-700" colSpan={3}>Total ({f.detalhesARRecebidas.length} título(s))</td>
+                              <td className="py-2 px-4 text-right text-green-700">
+                                {formatCurrency(f.detalhesARRecebidas.reduce((s, ar) => s + Number(ar.valor || 0), 0))}
+                              </td>
                             </tr>
-                          ))
+                          </>
                         )}
                       </tbody>
                     </table>
@@ -530,14 +605,22 @@ export default function RaioXPage() {
                         {(!f.detalhesAR || f.detalhesAR.length === 0) ? (
                           <tr><td colSpan={4} className="py-6 text-center text-gray-500">Nenhuma conta a receber</td></tr>
                         ) : (
-                          f.detalhesAR.map((ar) => (
-                            <tr key={ar.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                              <td className="py-2 px-4 text-gray-900 truncate max-w-[120px]">{ar.descricao}</td>
-                              <td className="py-2 px-4 text-gray-600">{ar.cliente}</td>
-                              <td className="py-2 px-4 text-gray-600">{formatDate(ar.vencimento)}</td>
-                              <td className="py-2 px-4 text-right font-semibold text-[#00B299]">{formatCurrency(ar.valor)}</td>
+                          <>
+                            {f.detalhesAR.map((ar) => (
+                              <tr key={ar.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                                <td className="py-2 px-4 text-gray-900 truncate max-w-[120px]">{ar.descricao}</td>
+                                <td className="py-2 px-4 text-gray-600">{ar.cliente}</td>
+                                <td className="py-2 px-4 text-gray-600">{formatDate(ar.vencimento)}</td>
+                                <td className="py-2 px-4 text-right font-semibold text-[#00B299]">{formatCurrency(ar.valor)}</td>
+                              </tr>
+                            ))}
+                            <tr className="bg-teal-50/70 font-semibold border-t-2 border-[#00B299]/30">
+                              <td className="py-2 px-4 text-gray-700" colSpan={3}>Total ({f.detalhesAR.length} título(s))</td>
+                              <td className="py-2 px-4 text-right text-[#00B299]">
+                                {formatCurrency(f.detalhesAR.reduce((s, ar) => s + Number(ar.valor || 0), 0))}
+                              </td>
                             </tr>
-                          ))
+                          </>
                         )}
                       </tbody>
                     </table>

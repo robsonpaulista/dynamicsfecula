@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { Decimal } from '@prisma/client/runtime/library'
 import { prisma } from '@/lib/prisma'
 import { authenticate, authorize } from '@/middleware/auth'
+import { BadRequestError } from '@/utils/errors'
 
 /**
  * Valida inconsistências financeiras. Apenas ADMIN.
@@ -11,6 +12,7 @@ import { authenticate, authorize } from '@/middleware/auth'
  * GET ?tipo=pedidos_cancelados_com_ar - retorna pedidos cancelados que têm AR em aberto (para transferir)
  * GET ?tipo=estoque_vendas_canceladas - retorna movimentações de saída de vendas canceladas (para reverter)
  * GET ?tipo=estoque_saidas_duplicadas - retorna saídas duplicadas (mesmo pedido+produto com mais de uma movimentação)
+ * GET ?tipo=pedidos_cancelados - retorna todos os pedidos cancelados (para estornar cancelamento)
  */
 export async function GET(request) {
   try {
@@ -291,6 +293,47 @@ export async function GET(request) {
           resumo: result.length > 0
             ? `${result.length} movimentação(ões) de saída de vendas canceladas. Use "Reverter estoque" para corrigir.`
             : 'Nenhuma movimentação de saída de venda cancelada encontrada.',
+        },
+      })
+    }
+
+    if (tipo === 'pedidos_cancelados') {
+      // Todos os pedidos cancelados (para estornar cancelamento: voltar a entregue, recriar AR e estoque)
+      const pedidos = await prisma.salesOrder.findMany({
+        where: { status: 'CANCELED' },
+        include: {
+          customer: { select: { name: true } },
+          items: {
+            include: {
+              product: { select: { id: true, name: true, sku: true, type: true } },
+            },
+          },
+        },
+        orderBy: { saleDate: 'desc' },
+      })
+      const result = pedidos.map((p) => ({
+        id: p.id,
+        saleDate: p.saleDate,
+        total: Number(p.total),
+        customerName: p.customer?.name ?? '-',
+        isBonificacao: p.isBonificacao,
+        installmentsJson: p.installmentsJson,
+        items: p.items?.map((i) => ({
+          productId: i.productId,
+          productName: i.product?.name,
+          sku: i.product?.sku,
+          productType: i.product?.type,
+          quantity: Number(i.quantity),
+        })) ?? [],
+      }))
+      return NextResponse.json({
+        success: true,
+        data: {
+          total: result.length,
+          itens: result,
+          resumo: result.length > 0
+            ? `${result.length} pedido(s) cancelado(s). Use "Estornar cancelamento" para restaurar como entregue (AR + estoque).`
+            : 'Nenhum pedido cancelado.',
         },
       })
     }
@@ -792,6 +835,162 @@ export async function POST(request) {
           corrigidos: pedidos.length,
           arCriadas: criados,
           message: `${criados} conta(s) a receber criada(s) para ${pedidos.length} pedido(s).`,
+        },
+      })
+    }
+
+    if (acao === 'estornar_cancelamento') {
+      const salesOrderId = body.salesOrderId
+      if (!salesOrderId || typeof salesOrderId !== 'string') {
+        return NextResponse.json(
+          { success: false, error: { message: 'salesOrderId é obrigatório', code: 'BAD_REQUEST' } },
+          { status: 400 }
+        )
+      }
+
+      const order = await prisma.salesOrder.findUnique({
+        where: { id: salesOrderId },
+        include: {
+          items: {
+            include: {
+              product: {
+                include: { stockBalance: true },
+              },
+            },
+          },
+          accountsReceivable: { select: { id: true, status: true } },
+        },
+      })
+
+      if (!order) {
+        return NextResponse.json(
+          { success: false, error: { message: 'Pedido não encontrado', code: 'NOT_FOUND' } },
+          { status: 404 }
+        )
+      }
+      if (order.status !== 'CANCELED') {
+        return NextResponse.json(
+          { success: false, error: { message: 'Apenas pedidos cancelados podem ser estornados', code: 'BAD_REQUEST' } },
+          { status: 400 }
+        )
+      }
+
+      const existingOut = await prisma.stockMovement.count({
+        where: {
+          referenceType: 'SALE',
+          referenceId: order.id,
+          type: 'OUT',
+        },
+      })
+
+      await prisma.$transaction(async (tx) => {
+        // 1) Status do pedido para DELIVERED
+        await tx.salesOrder.update({
+          where: { id: order.id },
+          data: { status: 'DELIVERED' },
+        })
+
+        // 2) Contas a receber: reabrir AR canceladas; se não houver nenhuma, criar a partir de installmentsJson/total
+        const arCanceladas = order.accountsReceivable.filter((ar) => ar.status === 'CANCELED')
+        const arAbertas = order.accountsReceivable.filter((ar) => ar.status === 'OPEN')
+        if (arCanceladas.length > 0) {
+          await tx.accountsReceivable.updateMany({
+            where: { salesOrderId: order.id, status: 'CANCELED' },
+            data: { status: 'OPEN' },
+          })
+        } else if (arAbertas.length === 0) {
+          const installmentsData = order.installmentsJson
+          const hasInstallments = installmentsData?.installments && Array.isArray(installmentsData.installments) && installmentsData.installments.length > 0
+          if (!order.isBonificacao) {
+            if (hasInstallments) {
+              const baseDescription = `Pedido de venda #${order.id.slice(0, 8)}`
+              const categoryId = installmentsData.categoryId || null
+              const saleDate = order.saleDate
+              for (let i = 0; i < installmentsData.installments.length; i++) {
+                const inst = installmentsData.installments[i]
+                const installmentNumber = installmentsData.installments.length > 1 ? ` - Parcela ${i + 1}/${installmentsData.installments.length}` : ''
+                let paymentMethodId = inst.paymentMethodId && String(inst.paymentMethodId).trim() !== '' ? inst.paymentMethodId : null
+                if (paymentMethodId) {
+                  const pm = await tx.paymentMethod.findUnique({ where: { id: paymentMethodId } })
+                  if (!pm) paymentMethodId = null
+                }
+                let paymentDays = null
+                if (inst.dueDate && saleDate) {
+                  const dueDate = new Date(inst.dueDate)
+                  const diffDays = Math.ceil((dueDate.getTime() - new Date(saleDate).getTime()) / (1000 * 60 * 60 * 24))
+                  if (diffDays > 0) paymentDays = diffDays
+                }
+                await tx.accountsReceivable.create({
+                  data: {
+                    customerId: order.customerId,
+                    salesOrderId: order.id,
+                    description: inst.description || `${baseDescription}${installmentNumber}`,
+                    dueDate: new Date(inst.dueDate),
+                    amount: new Decimal(Number(inst.amount)),
+                    categoryId: categoryId || null,
+                    paymentMethodId,
+                    paymentDays,
+                    status: 'OPEN',
+                  },
+                })
+              }
+            } else {
+              const defaultDueDate = new Date(order.saleDate)
+              defaultDueDate.setDate(defaultDueDate.getDate() + 30)
+              await tx.accountsReceivable.create({
+                data: {
+                  customerId: order.customerId,
+                  salesOrderId: order.id,
+                  description: `Pedido de venda #${order.id.slice(0, 8)}`,
+                  dueDate: defaultDueDate,
+                  amount: order.total,
+                  categoryId: null,
+                  paymentMethodId: null,
+                  paymentDays: 30,
+                  status: 'OPEN',
+                },
+              })
+            }
+          }
+        }
+
+        // 3) Estoque: criar saídas apenas se ainda não existir (evitar duplicata)
+        if (existingOut === 0) {
+          for (const item of order.items) {
+            const product = item.product
+            if (product.type !== 'SERVICO') {
+              const balance = product.stockBalance
+              if (!balance) continue
+              const currentQuantity = Number(balance.quantity)
+              const requestedQuantity = Number(item.quantity)
+              if (currentQuantity < requestedQuantity) {
+                throw new BadRequestError(`Estoque insuficiente para ${product.name}. Disponível: ${currentQuantity}`)
+              }
+              await tx.stockMovement.create({
+                data: {
+                  productId: item.productId,
+                  type: 'OUT',
+                  quantity: item.quantity,
+                  referenceType: 'SALE',
+                  referenceId: order.id,
+                  note: `Saída - Pedido de venda #${order.id.slice(0, 8)} (estorno cancelamento)`,
+                  createdById: user.id,
+                },
+              })
+              const newQuantity = currentQuantity - requestedQuantity
+              await tx.stockBalance.update({
+                where: { productId: item.productId },
+                data: { quantity: new Decimal(newQuantity) },
+              })
+            }
+          }
+        }
+      })
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          message: 'Cancelamento estornado. Pedido restaurado como entregue; contas a receber e movimentação de estoque restauradas.',
         },
       })
     }

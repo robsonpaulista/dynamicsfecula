@@ -7,10 +7,14 @@ import { NotFoundError, BadRequestError } from '@/utils/errors'
 
 const updateAccountPayableSchema = z.object({
   description: z.string().min(1, 'Descrição é obrigatória').optional(),
+  supplierId: z.string().optional().nullable(),
+  salesOrderId: z.string().optional().nullable(),
   dueDate: z.string().or(z.date()).optional(),
   amount: z.number().min(0.01, 'Valor deve ser maior que zero').optional(),
   categoryId: z.string().nullable().optional(),
   status: z.enum(['OPEN', 'PAID', 'CANCELED']).optional(),
+  receiptBase64: z.string().optional().nullable(),
+  isDeliveryCost: z.boolean().optional(),
 })
 
 export async function GET(request, { params }) {
@@ -117,16 +121,19 @@ export async function PUT(request, { params }) {
       )
     }
 
-    // Não permitir edição se a conta já foi paga
-    if (existingAccount.status === 'PAID') {
+    const body = await request.json()
+    const data = updateAccountPayableSchema.parse(body)
+
+    const dataKeys = Object.keys(data)
+    const hasFieldsOtherThanDeliveryCost = dataKeys.some((key) => key !== 'isDeliveryCost')
+
+    // Se a conta estiver paga, só permitir marcar/desmarcar custo de entrega
+    if (existingAccount.status === 'PAID' && hasFieldsOtherThanDeliveryCost) {
       return NextResponse.json(
         { success: false, error: { message: 'Não é possível editar uma conta já paga', code: 'BAD_REQUEST' } },
         { status: 400 }
       )
     }
-
-    const body = await request.json()
-    const data = updateAccountPayableSchema.parse(body)
 
     // Preparar dados de atualização
     const updateData = {}
@@ -135,6 +142,24 @@ export async function PUT(request, { params }) {
     if (data.amount !== undefined) updateData.amount = new Decimal(data.amount)
     if (data.categoryId !== undefined) updateData.categoryId = data.categoryId
     if (data.status !== undefined) updateData.status = data.status
+    if (data.receiptBase64 !== undefined) updateData.receiptBase64 = data.receiptBase64 || null
+    if (data.isDeliveryCost !== undefined) updateData.isDeliveryCost = data.isDeliveryCost
+    // Só permite alterar fornecedor/venda em despesas manuais (sem pedido de compra)
+    if (existingAccount.purchaseOrderId == null) {
+      if (data.supplierId !== undefined) updateData.supplierId = data.supplierId || null
+      if (data.salesOrderId !== undefined) {
+        if (data.salesOrderId) {
+          const salesOrder = await prisma.salesOrder.findUnique({ where: { id: data.salesOrderId } })
+          if (!salesOrder) {
+            return NextResponse.json(
+              { success: false, error: { message: 'Pedido de venda não encontrado', code: 'NOT_FOUND' } },
+              { status: 404 }
+            )
+          }
+        }
+        updateData.salesOrderId = data.salesOrderId || null
+      }
+    }
 
     // Se houver pedido relacionado, validar que o valor não excede o total do pedido
     if (existingAccount.purchaseOrderId && data.amount !== undefined) {
@@ -241,6 +266,21 @@ export async function PUT(request, { params }) {
       return NextResponse.json(
         { success: false, error: { message: error.message, code: error.code || 'ERROR' } },
         { status: error.statusCode || 400 }
+      )
+    }
+
+    // Sugerir migration se o erro parecer relacionado ao comprovante (coluna inexistente)
+    const msg = error.message || ''
+    if (msg.includes('receipt_base64') || (msg.includes('Unknown arg') && msg.includes('receiptBase64'))) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: 'Campo de comprovante não encontrado no banco. Execute a migration: npx prisma migrate deploy',
+            code: 'MIGRATION_REQUIRED',
+          },
+        },
+        { status: 500 }
       )
     }
 

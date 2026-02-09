@@ -142,13 +142,7 @@ export async function GET(request, { params }) {
       })
     )
 
-    // Excluir movimentações de vendas canceladas (não devem aparecer como saída no extrato)
-    const movementsFiltered = movementsWithReferences.filter((m) => {
-      if (m.reference?.type === 'SALE' && m.reference.isCanceled) return false
-      return true
-    })
-
-    // Serializar movimentações também
+    // Mostrar todas as movimentações (incluindo vendas canceladas e seus estornos) para o extrato bater com o saldo
     const serializedProduct = {
       ...product,
       minStock: product.minStock ? Number(product.minStock) : null,
@@ -158,7 +152,7 @@ export async function GET(request, { params }) {
         ...product.stockBalance,
         quantity: Number(product.stockBalance.quantity),
       } : null,
-      stockMovements: movementsFiltered.map(movement => ({
+      stockMovements: movementsWithReferences.map(movement => ({
         ...movement,
         quantity: Number(movement.quantity),
         unitCost: movement.unitCost ? Number(movement.unitCost) : null,

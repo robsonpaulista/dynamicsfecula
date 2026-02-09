@@ -4,6 +4,12 @@ const nextConfig = {
   images: {
     domains: [],
   },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+    proxyClientMaxBodySize: '10mb',
+  },
   // Garantir que arquivos estáticos sejam servidos corretamente
   // Desabilitar compressão para arquivos estáticos (Vercel faz isso automaticamente)
   compress: true,

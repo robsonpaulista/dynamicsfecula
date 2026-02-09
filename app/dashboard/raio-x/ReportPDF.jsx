@@ -70,16 +70,35 @@ export default function ReportPDF({ data, periodLabel }) {
           {(!c.pedidos || c.pedidos.length === 0) ? (
             <tr><td colSpan={6} style={{ ...tdStyle, textAlign: 'center', padding: 12 }}>Nenhum pedido</td></tr>
           ) : (
-            c.pedidos.map((po) => (
-              <tr key={po.id}>
-                <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 6 }}>#{po.id.slice(0, 8)}</td>
-                <td style={tdStyle}>{po.fornecedor}</td>
-                <td style={{ ...tdStyle, fontSize: 6 }}>{formatDate(po.data)}</td>
-                <td style={tdRight}>{formatCurrency(po.total)}</td>
-                <td style={{ ...tdStyle, fontSize: 6, lineHeight: 1.2 }}>{po.fontePagadora || '-'}</td>
-                <td style={{ ...tdStyle, fontSize: 6 }}>{po.statusLabel || po.status}</td>
-              </tr>
-            ))
+            <>
+              {c.pedidos.map((po) => (
+                <tr key={po.id}>
+                  <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 6 }}>#{po.id.slice(0, 8)}</td>
+                  <td style={tdStyle}>{po.fornecedor}</td>
+                  <td style={{ ...tdStyle, fontSize: 6 }}>{formatDate(po.data)}</td>
+                  <td style={tdRight}>{formatCurrency(po.total)}</td>
+                  <td style={{ ...tdStyle, fontSize: 6, lineHeight: 1.2 }}>{po.fontePagadora || '-'}</td>
+                  <td style={{ ...tdStyle, fontSize: 6 }}>{po.statusLabel || po.status}</td>
+                </tr>
+              ))}
+              {(() => {
+                const totalPedidos = c.pedidos?.length || 0
+                const sumCompras = c.pedidos?.reduce((s, po) => s + Number(po.total || 0), 0) || 0
+                return (
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600, color: '#0f172a' }} colSpan={3}>
+                      Total ({totalPedidos} pedido(s))
+                    </td>
+                    <td style={{ ...tdRight, fontWeight: 700, color: '#0f172a' }}>
+                      {formatCurrency(sumCompras)}
+                    </td>
+                    <td style={{ ...tdStyle, fontSize: 6 }} colSpan={2}>
+                      &nbsp;
+                    </td>
+                  </tr>
+                )
+              })()}
+            </>
           )}
         </tbody>
       </table>
@@ -106,16 +125,35 @@ export default function ReportPDF({ data, periodLabel }) {
           {(!p.detalhes || p.detalhes.length === 0) ? (
             <tr><td colSpan={6} style={{ ...tdStyle, textAlign: 'center', padding: 12 }}>Nenhum produto com movimentação</td></tr>
           ) : (
-            p.detalhes.map((prod) => (
-              <tr key={prod.id}>
-                <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 6 }}>{prod.sku}</td>
-                <td style={tdStyle}>{prod.name}</td>
-                <td style={tdRight}>{prod.comprada}</td>
-                <td style={tdRight}>{prod.saidas}</td>
-                <td style={{ ...tdRight, fontWeight: 600, color: '#0f172a' }}>{prod.saldo}</td>
-                <td style={tdStyle}>{prod.unit}</td>
-              </tr>
-            ))
+            <>
+              {p.detalhes.map((prod) => (
+                <tr key={prod.id}>
+                  <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 6 }}>{prod.sku}</td>
+                  <td style={tdStyle}>{prod.name}</td>
+                  <td style={tdRight}>{prod.comprada}</td>
+                  <td style={tdRight}>{prod.saidas}</td>
+                  <td style={{ ...tdRight, fontWeight: 600, color: '#0f172a' }}>{prod.saldo}</td>
+                  <td style={tdStyle}>{prod.unit}</td>
+                </tr>
+              ))}
+              {(() => {
+                const itens = p.detalhes || []
+                const sumComprada = itens.reduce((s, item) => s + Number(item.comprada || 0), 0)
+                const sumSaidas = itens.reduce((s, item) => s + Number(item.saidas || 0), 0)
+                const sumSaldo = itens.reduce((s, item) => s + Number(item.saldo || 0), 0)
+                return (
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600, color: '#0f172a' }} colSpan={2}>
+                      Total ({itens.length} produto(s))
+                    </td>
+                    <td style={{ ...tdRight, fontWeight: 600 }}>{sumComprada}</td>
+                    <td style={{ ...tdRight, fontWeight: 600 }}>{sumSaidas}</td>
+                    <td style={{ ...tdRight, fontWeight: 700, color: '#0f172a' }}>{sumSaldo}</td>
+                    <td style={tdStyle}>&nbsp;</td>
+                  </tr>
+                )
+              })()}
+            </>
           )}
         </tbody>
       </table>
@@ -126,21 +164,23 @@ export default function ReportPDF({ data, periodLabel }) {
       <div style={{ display: 'flex', gap: 24, marginBottom: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 8 }}><strong>Pedidos:</strong> {v.qtdePedidos ?? 0}</span>
         <span style={{ fontSize: 8 }}><strong>Total vendido:</strong> {formatCurrency(v.totalVendido ?? 0)}</span>
-        <span style={{ fontSize: 8 }}><strong>Custo:</strong> {formatCurrency(v.custo ?? 0)}</span>
+        <span style={{ fontSize: 8 }}><strong>Custo produtos:</strong> {formatCurrency(v.custo ?? 0)}</span>
+        <span style={{ fontSize: 8 }}><strong>Custo entregas:</strong> {formatCurrency(v.custoEntregas ?? 0)}</span>
         <span style={{ fontSize: 8, color: '#059669' }}><strong>Lucro:</strong> {formatCurrency(v.lucro ?? 0)}</span>
         <span style={{ fontSize: 8, color: '#059669' }}><strong>Margem:</strong> {(v.margemPercent ?? 0).toFixed(1)}%</span>
       </div>
       <div style={tableWrapper}>
       <table style={tableBase}>
         <colgroup>
-          <col style={{ width: '9%' }} />
-          <col style={{ width: '20%' }} />
           <col style={{ width: '8%' }} />
-          <col style={{ width: '10%' }} />
-          <col style={{ width: '13%' }} />
-          <col style={{ width: '13%' }} />
-          <col style={{ width: '13%' }} />
-          <col style={{ width: '10%' }} />
+          <col style={{ width: '18%' }} />
+          <col style={{ width: '8%' }} />
+          <col style={{ width: '9%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '9%' }} />
         </colgroup>
         <thead>
           <tr>
@@ -150,26 +190,50 @@ export default function ReportPDF({ data, periodLabel }) {
             <th style={thStyle}>Status</th>
             <th style={{ ...thStyle, textAlign: 'right' }}>Total</th>
             <th style={{ ...thStyle, textAlign: 'right' }}>Custo</th>
+            <th style={{ ...thStyle, textAlign: 'right' }}>Custo entregas</th>
             <th style={{ ...thStyle, textAlign: 'right' }}>Lucro</th>
             <th style={{ ...thStyle, textAlign: 'right' }}>Margem</th>
           </tr>
         </thead>
         <tbody>
           {(!v.pedidos || v.pedidos.length === 0) ? (
-            <tr><td colSpan={8} style={{ ...tdStyle, textAlign: 'center', padding: 12 }}>Nenhum pedido</td></tr>
+            <tr><td colSpan={9} style={{ ...tdStyle, textAlign: 'center', padding: 12 }}>Nenhum pedido</td></tr>
           ) : (
-            v.pedidos.map((pv) => (
-              <tr key={pv.id}>
-                <td style={tdStyle}>#{pv.id.slice(0, 8)}</td>
-                <td style={tdStyle}>{pv.cliente}</td>
-                <td style={tdStyle}>{formatDate(pv.data)}</td>
-                <td style={tdStyle}>{pv.statusLabel || pv.status}</td>
-                <td style={tdRight}>{formatCurrency(pv.total)}</td>
-                <td style={tdRight}>{formatCurrency(pv.custo)}</td>
-                <td style={{ ...tdRight, color: '#059669' }}>{formatCurrency(pv.lucro)}</td>
-                <td style={{ ...tdRight, color: '#059669' }}>{(pv.margem ?? 0).toFixed(1)}%</td>
-              </tr>
-            ))
+            (() => {
+              const pedidos = v.pedidos || []
+              const sumTotal = pedidos.reduce((s, p) => s + Number(p.total || 0), 0)
+              const sumCusto = pedidos.reduce((s, p) => s + Number(p.custo || 0), 0)
+              const sumCustoEntregas = pedidos.reduce((s, p) => s + Number(p.custoEntregas || 0), 0)
+              const sumLucro = pedidos.reduce((s, p) => s + Number(p.lucro || 0), 0)
+              const margemTotal = sumTotal > 0 ? (sumLucro / sumTotal) * 100 : 0
+              return (
+                <>
+                  {pedidos.map((pv) => (
+                    <tr key={pv.id}>
+                      <td style={tdStyle}>#{pv.id.slice(0, 8)}</td>
+                      <td style={tdStyle}>{pv.cliente}</td>
+                      <td style={tdStyle}>{formatDate(pv.data)}</td>
+                      <td style={tdStyle}>{pv.statusLabel || pv.status}</td>
+                      <td style={tdRight}>{formatCurrency(pv.total)}</td>
+                      <td style={tdRight}>{formatCurrency(pv.custo)}</td>
+                      <td style={tdRight}>{formatCurrency(pv.custoEntregas ?? 0)}</td>
+                      <td style={{ ...tdRight, color: '#059669' }}>{formatCurrency(pv.lucro)}</td>
+                      <td style={{ ...tdRight, color: '#059669' }}>{(pv.margem ?? 0).toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600 }} colSpan={4}>
+                      Total ({pedidos.length} pedido(s))
+                    </td>
+                    <td style={{ ...tdRight, fontWeight: 700 }}>{formatCurrency(sumTotal)}</td>
+                    <td style={{ ...tdRight, fontWeight: 600 }}>{formatCurrency(sumCusto)}</td>
+                    <td style={{ ...tdRight, fontWeight: 600 }}>{formatCurrency(sumCustoEntregas)}</td>
+                    <td style={{ ...tdRight, fontWeight: 700, color: '#059669' }}>{formatCurrency(sumLucro)}</td>
+                    <td style={{ ...tdRight, fontWeight: 700, color: '#059669' }}>{margemTotal.toFixed(1)}%</td>
+                  </tr>
+                </>
+              )
+            })()
           )}
         </tbody>
       </table>
@@ -200,14 +264,28 @@ export default function ReportPDF({ data, periodLabel }) {
           {(!f.detalhesAPPagas || f.detalhesAPPagas.length === 0) ? (
             <tr><td colSpan={4} style={{ ...tdStyle, textAlign: 'center', padding: 8 }}>Nenhuma</td></tr>
           ) : (
-            f.detalhesAPPagas.map((ap) => (
-              <tr key={ap.id}>
-                <td style={descriptionStyle}>{ap.descricao}</td>
-                <td style={tdStyle}>{ap.fornecedor}</td>
-                <td style={{ ...tdStyle, fontSize: 6 }}>{formatDate(ap.pagamento)}</td>
-                <td style={tdRight}>{formatCurrency(ap.valor)}</td>
-              </tr>
-            ))
+            (() => {
+              const titulos = f.detalhesAPPagas || []
+              const sumValores = titulos.reduce((s, item) => s + Number(item.valor || 0), 0)
+              return (
+                <>
+                  {titulos.map((ap) => (
+                    <tr key={ap.id}>
+                      <td style={descriptionStyle}>{ap.descricao}</td>
+                      <td style={tdStyle}>{ap.fornecedor}</td>
+                      <td style={{ ...tdStyle, fontSize: 6 }}>{formatDate(ap.pagamento)}</td>
+                      <td style={tdRight}>{formatCurrency(ap.valor)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600 }} colSpan={3}>
+                      Total ({titulos.length} título(s))
+                    </td>
+                    <td style={{ ...tdRight, fontWeight: 700 }}>{formatCurrency(sumValores)}</td>
+                  </tr>
+                </>
+              )
+            })()
           )}
         </tbody>
       </table>
@@ -228,14 +306,28 @@ export default function ReportPDF({ data, periodLabel }) {
           {(!f.detalhesAP || f.detalhesAP.length === 0) ? (
             <tr><td colSpan={4} style={{ ...tdStyle, textAlign: 'center', padding: 8 }}>Nenhuma</td></tr>
           ) : (
-            f.detalhesAP.map((ap) => (
-              <tr key={ap.id}>
-                <td style={descriptionStyle}>{ap.descricao}</td>
-                <td style={tdStyle}>{ap.fornecedor}</td>
-                <td style={{ ...tdStyle, fontSize: 6 }}>{formatDate(ap.vencimento)}</td>
-                <td style={tdRight}>{formatCurrency(ap.valor)}</td>
-              </tr>
-            ))
+            (() => {
+              const titulos = f.detalhesAP || []
+              const sumValores = titulos.reduce((s, item) => s + Number(item.valor || 0), 0)
+              return (
+                <>
+                  {titulos.map((ap) => (
+                    <tr key={ap.id}>
+                      <td style={descriptionStyle}>{ap.descricao}</td>
+                      <td style={tdStyle}>{ap.fornecedor}</td>
+                      <td style={{ ...tdStyle, fontSize: 6 }}>{formatDate(ap.vencimento)}</td>
+                      <td style={tdRight}>{formatCurrency(ap.valor)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600 }} colSpan={3}>
+                      Total ({titulos.length} título(s))
+                    </td>
+                    <td style={{ ...tdRight, fontWeight: 700 }}>{formatCurrency(sumValores)}</td>
+                  </tr>
+                </>
+              )
+            })()
           )}
         </tbody>
       </table>
@@ -256,14 +348,28 @@ export default function ReportPDF({ data, periodLabel }) {
           {(!f.detalhesARRecebidas || f.detalhesARRecebidas.length === 0) ? (
             <tr><td colSpan={4} style={{ ...tdStyle, textAlign: 'center', padding: 8 }}>Nenhuma</td></tr>
           ) : (
-            f.detalhesARRecebidas.map((ar) => (
-              <tr key={ar.id}>
-                <td style={descriptionStyle}>{ar.descricao}</td>
-                <td style={tdStyle}>{ar.cliente}</td>
-                <td style={{ ...tdStyle, fontSize: 6 }}>{formatDate(ar.recebimento)}</td>
-                <td style={tdRight}>{formatCurrency(ar.valor)}</td>
-              </tr>
-            ))
+            (() => {
+              const titulos = f.detalhesARRecebidas || []
+              const sumValores = titulos.reduce((s, item) => s + Number(item.valor || 0), 0)
+              return (
+                <>
+                  {titulos.map((ar) => (
+                    <tr key={ar.id}>
+                      <td style={descriptionStyle}>{ar.descricao}</td>
+                      <td style={tdStyle}>{ar.cliente}</td>
+                      <td style={{ ...tdStyle, fontSize: 6 }}>{formatDate(ar.recebimento)}</td>
+                      <td style={tdRight}>{formatCurrency(ar.valor)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600 }} colSpan={3}>
+                      Total ({titulos.length} título(s))
+                    </td>
+                    <td style={{ ...tdRight, fontWeight: 700 }}>{formatCurrency(sumValores)}</td>
+                  </tr>
+                </>
+              )
+            })()
           )}
         </tbody>
       </table>
@@ -284,14 +390,28 @@ export default function ReportPDF({ data, periodLabel }) {
           {(!f.detalhesAR || f.detalhesAR.length === 0) ? (
             <tr><td colSpan={4} style={{ ...tdStyle, textAlign: 'center', padding: 8 }}>Nenhuma</td></tr>
           ) : (
-            f.detalhesAR.map((ar) => (
-              <tr key={ar.id}>
-                <td style={descriptionStyle}>{ar.descricao}</td>
-                <td style={tdStyle}>{ar.cliente}</td>
-                <td style={{ ...tdStyle, fontSize: 6 }}>{formatDate(ar.vencimento)}</td>
-                <td style={tdRight}>{formatCurrency(ar.valor)}</td>
-              </tr>
-            ))
+            (() => {
+              const titulos = f.detalhesAR || []
+              const sumValores = titulos.reduce((s, item) => s + Number(item.valor || 0), 0)
+              return (
+                <>
+                  {titulos.map((ar) => (
+                    <tr key={ar.id}>
+                      <td style={descriptionStyle}>{ar.descricao}</td>
+                      <td style={tdStyle}>{ar.cliente}</td>
+                      <td style={{ ...tdStyle, fontSize: 6 }}>{formatDate(ar.vencimento)}</td>
+                      <td style={tdRight}>{formatCurrency(ar.valor)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ ...tdStyle, fontWeight: 600 }} colSpan={3}>
+                      Total ({titulos.length} título(s))
+                    </td>
+                    <td style={{ ...tdRight, fontWeight: 700 }}>{formatCurrency(sumValores)}</td>
+                  </tr>
+                </>
+              )
+            })()
           )}
         </tbody>
       </table>

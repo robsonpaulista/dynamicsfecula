@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ShieldCheck, RefreshCw, Loader2, AlertTriangle, CheckCircle, DollarSign, Package } from 'lucide-react'
+import { ShieldCheck, RefreshCw, Loader2, AlertTriangle, CheckCircle, DollarSign, Package, RotateCcw } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 export default function AuditoriaPage() {
@@ -21,6 +21,7 @@ export default function AuditoriaPage() {
   const [pedidosCanceladosComAR, setPedidosCanceladosComAR] = useState(null)
   const [estoqueVendasCanceladas, setEstoqueVendasCanceladas] = useState(null)
   const [estoqueSaidasDuplicadas, setEstoqueSaidasDuplicadas] = useState(null)
+  const [pedidosCancelados, setPedidosCancelados] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadingCaixa, setLoadingCaixa] = useState(true)
   const [loadingPedidosSemAR, setLoadingPedidosSemAR] = useState(true)
@@ -28,6 +29,7 @@ export default function AuditoriaPage() {
   const [transferirPara, setTransferirPara] = useState('')
   const [corrigindo, setCorrigindo] = useState(false)
   const [corrigindoId, setCorrigindoId] = useState(null)
+  const [estornandoPedidoId, setEstornandoPedidoId] = useState(null)
   const [revertendoCaixaId, setRevertendoCaixaId] = useState(null)
   const [abaAtiva, setAbaAtiva] = useState('ar')
   const [pedidoExpandido, setPedidoExpandido] = useState(null)
@@ -122,16 +124,27 @@ export default function AuditoriaPage() {
     }
   }, [])
 
+  const loadPedidosCancelados = useCallback(async () => {
+    try {
+      const response = await api.get('/finance/validate?tipo=pedidos_cancelados')
+      setPedidosCancelados(response.data.data)
+    } catch (error) {
+      if (error.response?.status === 403) return
+      setPedidosCancelados({ total: 0, itens: [], resumo: '' })
+    }
+  }, [])
+
   useEffect(() => {
     if (user?.role === 'ADMIN') {
       loadValidate()
       loadCaixa()
       loadPedidosSemAR()
       loadPedidosCanceladosComAR()
+      loadPedidosCancelados()
       loadEstoqueVendasCanceladas()
       loadEstoqueSaidasDuplicadas()
     }
-  }, [user?.role, loadValidate, loadCaixa, loadPedidosSemAR, loadPedidosCanceladosComAR, loadEstoqueVendasCanceladas, loadEstoqueSaidasDuplicadas])
+  }, [user?.role, loadValidate, loadCaixa, loadPedidosSemAR, loadPedidosCanceladosComAR, loadPedidosCancelados, loadEstoqueVendasCanceladas, loadEstoqueSaidasDuplicadas])
 
   const handleTransferirAR = async () => {
     if (!user || user.role !== 'ADMIN' || !transferirDe || !transferirPara) return
@@ -322,6 +335,39 @@ export default function AuditoriaPage() {
     }
   }
 
+  const handleEstornarCancelamento = async (salesOrderId) => {
+    if (!user || user.role !== 'ADMIN' || !salesOrderId) return
+    try {
+      setEstornandoPedidoId(salesOrderId)
+      const response = await api.post('/finance/validate', {
+        acao: 'estornar_cancelamento',
+        salesOrderId,
+      })
+      toast({
+        title: 'Cancelamento estornado',
+        description: response.data.data?.message || 'Pedido restaurado como entregue; AR e estoque restaurados.',
+      })
+      loadPedidosCancelados()
+      loadPedidosCanceladosComAR()
+      loadValidate()
+      loadPedidosSemAR()
+      loadEstoqueVendasCanceladas()
+      loadEstoqueSaidasDuplicadas()
+    } catch (error) {
+      if (error.response?.status === 403) {
+        toast({ title: 'Acesso negado', variant: 'destructive' })
+        return
+      }
+      toast({
+        title: 'Erro',
+        description: error.response?.data?.error?.message || 'Erro ao estornar cancelamento',
+        variant: 'destructive',
+      })
+    } finally {
+      setEstornandoPedidoId(null)
+    }
+  }
+
   const handleExcluirTransacaoCaixa = async (transactionId) => {
     if (!user || user.role !== 'ADMIN' || !transactionId) return
     try {
@@ -380,7 +426,7 @@ export default function AuditoriaPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => { loadValidate(); loadCaixa(); loadPedidosSemAR(); loadPedidosCanceladosComAR(); loadEstoqueVendasCanceladas(); loadEstoqueSaidasDuplicadas(); }}
+              onClick={() => { loadValidate(); loadCaixa(); loadPedidosSemAR(); loadPedidosCanceladosComAR(); loadPedidosCancelados(); loadEstoqueVendasCanceladas(); loadEstoqueSaidasDuplicadas(); }}
               disabled={loading || loadingCaixa || loadingPedidosSemAR}
               className="hover:bg-[#00B299]/10"
             >
@@ -465,6 +511,16 @@ export default function AuditoriaPage() {
           >
             <CheckCircle className="h-4 w-4" />
             Transferir AR
+          </button>
+          <button
+            type="button"
+            onClick={() => setAbaAtiva('estornar_cancelamento')}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+              abaAtiva === 'estornar_cancelamento' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50/50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            <RotateCcw className="h-4 w-4" />
+            Estornar cancelamento
           </button>
         </div>
 
@@ -1158,6 +1214,73 @@ export default function AuditoriaPage() {
                           <td className="py-2 px-4 text-right font-semibold text-red-700">-{m.quantity}</td>
                           <td className="py-2 px-4 text-gray-600">{formatDate(m.createdAt)}</td>
                           <td className="py-2 px-4 text-gray-600 font-mono">#{m.referenceId?.slice(0, 8)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+        )}
+
+        {/* Seção Estornar cancelamento (pedido cancelado → voltar a entregue, AR e estoque) */}
+        {abaAtiva === 'estornar_cancelamento' && (
+        <Card className="overflow-hidden border-teal-200/50">
+          <CardHeader className="bg-teal-50/50">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <div className="w-10 h-10 rounded-lg bg-teal-600 flex items-center justify-center">
+                <RotateCcw className="h-5 w-5 text-white" />
+              </div>
+              Estornar cancelamento de pedido
+            </CardTitle>
+            <p className="text-sm text-gray-600 mt-2">
+              Restaura um pedido cancelado como entregue: status volta a Entregue, contas a receber são reabertas ou criadas e a movimentação de estoque (saída) é gerada novamente. Use quando o cancelamento foi feito por engano.
+            </p>
+          </CardHeader>
+          <CardContent className="p-4">
+            {(pedidosCancelados?.total ?? 0) === 0 ? (
+              <div className="py-12 text-center">
+                <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-2" />
+                <p className="text-green-700 font-medium">Nenhum pedido cancelado</p>
+                <p className="text-sm text-gray-600 mt-1">Não há pedidos com status cancelado para estornar.</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600 mb-4">{pedidosCancelados?.resumo}</p>
+                <div className="overflow-x-auto border border-gray-200 rounded-lg max-h-[400px] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 z-10 bg-gray-100">
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-2 px-4 font-medium text-gray-700">Pedido</th>
+                        <th className="text-left py-2 px-4 font-medium text-gray-700">Cliente</th>
+                        <th className="text-left py-2 px-4 font-medium text-gray-700">Data</th>
+                        <th className="text-right py-2 px-4 font-medium text-gray-700">Total</th>
+                        <th className="text-center py-2 px-4 font-medium text-gray-700">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pedidosCancelados?.itens?.map((p) => (
+                        <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50/50 bg-teal-50/30">
+                          <td className="py-2 px-4 text-gray-900 font-mono">#{p.id?.slice(0, 8)}</td>
+                          <td className="py-2 px-4 text-gray-600">{p.customerName}</td>
+                          <td className="py-2 px-4 text-gray-600">{formatDate(p.saleDate)}</td>
+                          <td className="py-2 px-4 text-right font-semibold text-gray-800">{formatCurrency(p.total)}</td>
+                          <td className="py-2 px-4 text-center">
+                            <Button
+                              size="sm"
+                              onClick={() => handleEstornarCancelamento(p.id)}
+                              disabled={estornandoPedidoId !== null}
+                              className="bg-teal-600 hover:bg-teal-700 text-white"
+                            >
+                              {estornandoPedidoId === p.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>Estornar cancelamento</>
+                              )}
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
