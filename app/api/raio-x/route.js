@@ -10,9 +10,25 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const from = searchParams.get('from')
     const to = searchParams.get('to')
-    const hasPeriod = from || to
-    const startDate = from ? new Date(from) : null
-    const endDate = to ? new Date(to) : null
+    const hasFrom = !!from
+    const hasTo = !!to
+    const hasPeriod = hasFrom || hasTo
+
+    const parseDateOnly = (value, endOfDay = false) => {
+      if (!value) return null
+      const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value)
+      if (isDateOnly) {
+        return new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`)
+      }
+      const parsed = new Date(value)
+      if (Number.isNaN(parsed.getTime())) return null
+      if (endOfDay) parsed.setHours(23, 59, 59, 999)
+      else parsed.setHours(0, 0, 0, 0)
+      return parsed
+    }
+
+    const startDate = parseDateOnly(from, false)
+    const endDate = parseDateOnly(to, true)
 
     const dateFilter = (field) => {
       if (!hasPeriod) return undefined
@@ -151,11 +167,7 @@ export async function GET(request) {
     if (hasPeriod && (startDate || endDate)) {
       deliveryExpensesWhere.paidAt = {}
       if (startDate) deliveryExpensesWhere.paidAt.gte = startDate
-      if (endDate) {
-        const endOfDay = new Date(endDate)
-        endOfDay.setHours(23, 59, 59, 999)
-        deliveryExpensesWhere.paidAt.lte = endOfDay
-      }
+      if (endDate) deliveryExpensesWhere.paidAt.lte = endDate
     }
     const deliveryExpensesList = await prisma.accountsPayable.findMany({
       where: deliveryExpensesWhere,
@@ -194,6 +206,7 @@ export async function GET(request) {
     // === FINANCEIRO ===
     const apPaidWhere = { status: 'PAID', ...(hasPeriod && { paidAt: dateFilter('paidAt') }) }
     const arReceivedWhere = { status: 'RECEIVED', ...(hasPeriod && { receivedAt: dateFilter('receivedAt') }) }
+    const apOpenWhere = { status: 'OPEN', ...(hasPeriod && { dueDate: dateFilter('dueDate') }) }
 
     const [apPaid, arReceived, apOpenAgg, arOpenAgg, apPaidList, arReceivedList, apOpenList, arOpenList, cashTx] = await Promise.all([
       prisma.accountsPayable.aggregate({
@@ -205,7 +218,7 @@ export async function GET(request) {
         _sum: { amount: true },
       }),
       prisma.accountsPayable.aggregate({
-        where: { status: 'OPEN' },
+        where: apOpenWhere,
         _sum: { amount: true },
       }),
       prisma.accountsReceivable.aggregate({
@@ -225,7 +238,7 @@ export async function GET(request) {
         take: 100,
       }),
       prisma.accountsPayable.findMany({
-        where: { status: 'OPEN' },
+        where: apOpenWhere,
         include: { supplier: { select: { name: true } }, paymentMethod: { select: { name: true } } },
         orderBy: { dueDate: 'asc' },
         take: 100,
